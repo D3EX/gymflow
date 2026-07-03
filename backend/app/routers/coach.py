@@ -299,20 +299,22 @@ def get_coach_stats(
     """Get coach dashboard statistics"""
     
     if current_user.role == "admin":
-        total_clients = db.query(Member).filter(Member.status == "active").count()
-        total_coaches = db.query(User).filter(User.role == "coach").count()
+        total_clients = db.query(Member).join(User, Member.user_id == User.id).filter(User.gym_id == current_user.gym_id, Member.status == "active").count()
+        total_coaches = db.query(User).filter(User.gym_id == current_user.gym_id, User.role == "coach").count()
     else:
-        total_clients = db.query(CoachClient).filter(
+        total_clients = db.query(CoachClient).join(User, CoachClient.coach_id == User.id).filter(
             CoachClient.coach_id == current_user.id,
             CoachClient.is_active == True,
-            CoachClient.status == "approved"
+            CoachClient.status == "approved",
+            User.gym_id == current_user.gym_id
         ).count()
         total_coaches = 1
     
     today = date_type.today()
     upcoming_classes = db.query(Class).filter(
         Class.coach == current_user.name,
-        Class.is_active == True
+        Class.is_active == True,
+        Class.gym_id == current_user.gym_id
     ).limit(5).all()
     
     return {
@@ -335,7 +337,7 @@ def get_my_clients(
     """Get all clients assigned to the current coach with user data loaded"""
     
     if current_user.role == "admin":
-        clients = db.query(Member).options(joinedload(Member.user)).filter(Member.status == "active").all()
+        clients = db.query(Member).options(joinedload(Member.user)).join(User, Member.user_id == User.id).filter(User.gym_id == current_user.gym_id, Member.status == "active").all()
         return clients
     else:
         coach_clients = db.query(CoachClient).filter(
@@ -357,8 +359,9 @@ def get_pending_clients(
     """Get pending client requests for the current coach"""
     
     if current_user.role == "admin":
-        coach_clients = db.query(CoachClient).filter(
-            CoachClient.status == "pending"
+        coach_clients = db.query(CoachClient).join(User, CoachClient.coach_id == User.id).filter(
+            CoachClient.status == "pending",
+            User.gym_id == current_user.gym_id
         ).all()
     else:
         coach_clients = db.query(CoachClient).filter(
@@ -420,11 +423,11 @@ def assign_client_to_coach(
 ):
     """ADMIN: Assign a client to a coach"""
     
-    client = db.query(Member).filter(Member.id == client_id).first()
+    client = db.query(Member).join(User, Member.user_id == User.id).filter(Member.id == client_id, User.gym_id == current_user.gym_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     
-    coach = db.query(User).filter(User.id == coach_id, User.role == "coach").first()
+    coach = db.query(User).filter(User.id == coach_id, User.role == "coach", User.gym_id == current_user.gym_id).first()
     if not coach:
         raise HTTPException(status_code=404, detail="Coach not found")
     
@@ -585,7 +588,7 @@ def approve_client_assignment(
 ):
     """COACH/ADMIN: Approve a client assignment request"""
     
-    assignment = db.query(CoachClient).filter(CoachClient.id == assignment_id).first()
+    assignment = db.query(CoachClient).join(User, CoachClient.coach_id == User.id).filter(CoachClient.id == assignment_id).first()
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found")
     
@@ -631,7 +634,7 @@ def decline_client_assignment(
 ):
     """COACH/ADMIN: Decline a client assignment request"""
     
-    assignment = db.query(CoachClient).filter(CoachClient.id == assignment_id).first()
+    assignment = db.query(CoachClient).join(User, CoachClient.coach_id == User.id).filter(CoachClient.id == assignment_id).first()
     if not assignment:
         raise HTTPException(status_code=404, detail="Assignment not found")
     
@@ -675,10 +678,11 @@ def unassign_client(
 ):
     """Unassign a client from their coach (Admin only)"""
     
-    assignment = db.query(CoachClient).filter(
+    assignment = db.query(CoachClient).join(User, CoachClient.coach_id == User.id).filter(
         CoachClient.client_id == client_id,
         CoachClient.is_active == True,
-        CoachClient.status == "approved"
+        CoachClient.status == "approved",
+        User.gym_id == current_user.gym_id
     ).first()
     
     if not assignment:
@@ -786,7 +790,7 @@ def get_available_coaches(
 ):
     """Get all available coaches for members to choose from"""
     
-    coaches = db.query(User).filter(User.role == "coach", User.is_active == True).all()
+    coaches = db.query(User).filter(User.role == "coach", User.is_active == True, User.gym_id == current_user.gym_id).all()
     
     result = []
     for coach in coaches:
@@ -837,7 +841,7 @@ def assign_member_to_coach(
     if not member:
         raise HTTPException(status_code=404, detail="Member profile not found")
     
-    coach = db.query(User).filter(User.id == coach_id, User.role == "coach").first()
+    coach = db.query(User).filter(User.id == coach_id, User.role == "coach", User.gym_id == current_user.gym_id).first()
     if not coach:
         raise HTTPException(status_code=404, detail="Coach not found")
     
@@ -1061,14 +1065,14 @@ def unassign_member_from_coach(
 def cleanup_coach(
     coach_id: int,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
     """
     ADMIN: Clean up a coach - deactivate all assignments, programs, and sessions
     This should be called BEFORE deleting a coach user
     """
     
-    coach = db.query(User).filter(User.id == coach_id, User.role == "coach").first()
+    coach = db.query(User).filter(User.id == coach_id, User.role == "coach", User.gym_id == admin.gym_id).first()
     if not coach:
         raise HTTPException(status_code=404, detail="Coach not found")
     
@@ -1129,7 +1133,7 @@ def get_coach_availability(
 ):
     """Get availability for a specific coach"""
     
-    coach = db.query(User).filter(User.id == coach_id, User.role == "coach").first()
+    coach = db.query(User).filter(User.id == coach_id, User.role == "coach", User.gym_id == current_user.gym_id).first()
     if not coach:
         raise HTTPException(status_code=404, detail="Coach not found")
     
@@ -1161,14 +1165,20 @@ def add_client_progress(
     """Add progress tracking for a client"""
     
     if current_user.role == "coach":
-        coach_client = db.query(CoachClient).filter(
+        coach_client = db.query(CoachClient).join(User, CoachClient.coach_id == User.id).filter(
             CoachClient.coach_id == current_user.id,
             CoachClient.client_id == data.client_id,
             CoachClient.is_active == True,
-            CoachClient.status == "approved"
+            CoachClient.status == "approved",
+            User.gym_id == current_user.gym_id
         ).first()
         
         if not coach_client:
+            raise HTTPException(status_code=403, detail="Access denied to this client")
+    else:
+        # Admin must verify client is in their gym
+        client = db.query(Member).join(User, Member.user_id == User.id).filter(Member.id == data.client_id, User.gym_id == current_user.gym_id).first()
+        if not client:
             raise HTTPException(status_code=403, detail="Access denied to this client")
     
     progress = ClientProgress(
@@ -1204,14 +1214,20 @@ def get_client_progress(
     """Get progress history for a client"""
     
     if current_user.role == "coach":
-        coach_client = db.query(CoachClient).filter(
+        coach_client = db.query(CoachClient).join(User, CoachClient.coach_id == User.id).filter(
             CoachClient.coach_id == current_user.id,
             CoachClient.client_id == client_id,
             CoachClient.is_active == True,
-            CoachClient.status == "approved"
+            CoachClient.status == "approved",
+            User.gym_id == current_user.gym_id
         ).first()
         
         if not coach_client:
+            raise HTTPException(status_code=403, detail="Access denied to this client")
+    else:
+        # Admin must verify client is in their gym
+        client = db.query(Member).join(User, Member.user_id == User.id).filter(Member.id == client_id, User.gym_id == current_user.gym_id).first()
+        if not client:
             raise HTTPException(status_code=403, detail="Access denied to this client")
     
     progress = db.query(ClientProgress).filter(
@@ -1233,7 +1249,7 @@ def get_my_availability(
     """Get current coach's availability"""
     
     if current_user.role == "admin":
-        availability = db.query(CoachAvailability).all()
+        availability = db.query(CoachAvailability).join(User, CoachAvailability.coach_id == User.id).filter(User.gym_id == current_user.gym_id).all()
     else:
         availability = db.query(CoachAvailability).filter(
             CoachAvailability.coach_id == current_user.id
@@ -1325,14 +1341,20 @@ def send_message_to_client(
     """Send a notification/message to a client"""
     
     if current_user.role == "coach":
-        coach_client = db.query(CoachClient).filter(
+        coach_client = db.query(CoachClient).join(User, CoachClient.coach_id == User.id).filter(
             CoachClient.coach_id == current_user.id,
             CoachClient.client_id == client_id,
             CoachClient.is_active == True,
-            CoachClient.status == "approved"
+            CoachClient.status == "approved",
+            User.gym_id == current_user.gym_id
         ).first()
         
         if not coach_client:
+            raise HTTPException(status_code=403, detail="Access denied to this client")
+    else:
+        # Admin must verify client is in their gym
+        client = db.query(Member).join(User, Member.user_id == User.id).filter(Member.id == client_id, User.gym_id == current_user.gym_id).first()
+        if not client:
             raise HTTPException(status_code=403, detail="Access denied to this client")
     
     member = db.query(Member).filter(Member.id == client_id).first()
@@ -1366,13 +1388,19 @@ def get_client_detail_comprehensive(
     
     # Check access
     if current_user.role == "coach":
-        coach_client = db.query(CoachClient).filter(
+        coach_client = db.query(CoachClient).join(User, CoachClient.coach_id == User.id).filter(
             CoachClient.coach_id == current_user.id,
             CoachClient.client_id == client_id,
             CoachClient.is_active == True,
-            CoachClient.status == "approved"
+            CoachClient.status == "approved",
+            User.gym_id == current_user.gym_id
         ).first()
         if not coach_client:
+            raise HTTPException(status_code=403, detail="Access denied to this client")
+    else:
+        # Admin must verify client is in their gym
+        client_check = db.query(Member).join(User, Member.user_id == User.id).filter(Member.id == client_id, User.gym_id == current_user.gym_id).first()
+        if not client_check:
             raise HTTPException(status_code=403, detail="Access denied to this client")
     
     # Get client with user data
@@ -1689,13 +1717,19 @@ def get_client_notes(
     """Get all notes for a client"""
     # Check access
     if current_user.role == "coach":
-        coach_client = db.query(CoachClient).filter(
+        coach_client = db.query(CoachClient).join(User, CoachClient.coach_id == User.id).filter(
             CoachClient.coach_id == current_user.id,
             CoachClient.client_id == client_id,
             CoachClient.is_active == True,
-            CoachClient.status == "approved"
+            CoachClient.status == "approved",
+            User.gym_id == current_user.gym_id
         ).first()
         if not coach_client:
+            raise HTTPException(status_code=403, detail="Access denied to this client")
+    else:
+        # Admin must verify client is in their gym
+        client = db.query(Member).join(User, Member.user_id == User.id).filter(Member.id == client_id, User.gym_id == current_user.gym_id).first()
+        if not client:
             raise HTTPException(status_code=403, detail="Access denied to this client")
     
     notes = db.query(ClientNote).filter(
@@ -1715,13 +1749,19 @@ def create_client_note(
     """Create a note for a client"""
     # Check access
     if current_user.role == "coach":
-        coach_client = db.query(CoachClient).filter(
+        coach_client = db.query(CoachClient).join(User, CoachClient.coach_id == User.id).filter(
             CoachClient.coach_id == current_user.id,
             CoachClient.client_id == client_id,
             CoachClient.is_active == True,
-            CoachClient.status == "approved"
+            CoachClient.status == "approved",
+            User.gym_id == current_user.gym_id
         ).first()
         if not coach_client:
+            raise HTTPException(status_code=403, detail="Access denied to this client")
+    else:
+        # Admin must verify client is in their gym
+        client = db.query(Member).join(User, Member.user_id == User.id).filter(Member.id == client_id, User.gym_id == current_user.gym_id).first()
+        if not client:
             raise HTTPException(status_code=403, detail="Access denied to this client")
     
     note = ClientNote(

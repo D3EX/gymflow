@@ -18,7 +18,7 @@ from ..utils.auth import require_admin, get_current_user
 
 router = APIRouter(prefix="/api/subscriptions", tags=["Subscriptions"])
 
-# ─── helper: build MemberOut from a Member ORM object ───────────
+# helper: build MemberOut from a Member ORM object
 def _member_out(member):
     return MemberOut(
         id=member.id,
@@ -45,7 +45,7 @@ def _member_out(member):
         membership=None
     )
 
-# ─── helper: build PlanOut from a Plan ORM object ────────────────
+# helper: build PlanOut from a Plan ORM object
 def _plan_out(plan):
     if not plan:
         return None
@@ -58,7 +58,6 @@ def _plan_out(plan):
     )
 
 
-
 # ============================================================
 # ADMIN ENDPOINTS
 # ============================================================
@@ -67,10 +66,15 @@ def _plan_out(plan):
 def get_subscriptions(
     status: Optional[str] = None,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Get all subscriptions with optional status filter"""
-    query = db.query(Subscription)
+    """ADMIN: Get all subscriptions for the admin's gym with optional status filter"""
+    query = (
+        db.query(Subscription)
+        .join(Member, Subscription.member_id == Member.id)
+        .join(User, Member.user_id == User.id)
+        .filter(User.gym_id == admin.gym_id)
+    )
     if status:
         query = query.filter(Subscription.status == status)
     
@@ -131,16 +135,24 @@ def get_subscriptions(
 def create_subscription(
     data: SubscriptionCreate, 
     db: Session = Depends(get_db), 
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Create a new subscription for a member"""
-    member = db.query(Member).filter(Member.id == data.member_id).first()
-    plan = db.query(Plan).filter(Plan.id == data.plan_id).first()
-    
+    """ADMIN: Create a new subscription for a member in the admin's gym"""
+    # Verify member belongs to admin's gym
+    member = db.query(Member).join(User, Member.user_id == User.id).filter(
+        Member.id == data.member_id,
+        User.gym_id == admin.gym_id
+    ).first()
     if not member:
-        raise HTTPException(status_code=404, detail="Member not found")
+        raise HTTPException(status_code=404, detail="Member not found in your gym")
+    
+    # Verify plan belongs to admin's gym
+    plan = db.query(Plan).filter(
+        Plan.id == data.plan_id,
+        Plan.gym_id == admin.gym_id
+    ).first()
     if not plan:
-        raise HTTPException(status_code=404, detail="Plan not found")
+        raise HTTPException(status_code=404, detail="Plan not found in your gym")
     
     existing_active = db.query(Subscription).filter(
         Subscription.member_id == data.member_id,
@@ -203,10 +215,18 @@ def update_subscription(
     sub_id: int, 
     data: SubscriptionUpdate, 
     db: Session = Depends(get_db), 
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Update a subscription status"""
-    sub = db.query(Subscription).filter(Subscription.id == sub_id).first()
+    """ADMIN: Update a subscription status (must belong to admin's gym)"""
+    sub = (
+        db.query(Subscription)
+        .join(Member, Subscription.member_id == Member.id)
+        .join(User, Member.user_id == User.id)
+        .filter(
+            Subscription.id == sub_id,
+            User.gym_id == admin.gym_id
+        )
+    ).first()
     if not sub:
         raise HTTPException(status_code=404, detail="Subscription not found")
     
@@ -257,10 +277,18 @@ def update_subscription(
 def delete_subscription(
     sub_id: int, 
     db: Session = Depends(get_db), 
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Delete a subscription"""
-    sub = db.query(Subscription).filter(Subscription.id == sub_id).first()
+    """ADMIN: Delete a subscription (must belong to admin's gym)"""
+    sub = (
+        db.query(Subscription)
+        .join(Member, Subscription.member_id == Member.id)
+        .join(User, Member.user_id == User.id)
+        .filter(
+            Subscription.id == sub_id,
+            User.gym_id == admin.gym_id
+        )
+    ).first()
     if not sub:
         raise HTTPException(status_code=404, detail="Subscription not found")
     
@@ -274,23 +302,31 @@ def renew_subscription(
     sub_id: int,
     request: dict,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Renew a subscription"""
-    subscription = db.query(Subscription).filter(Subscription.id == sub_id).first()
+    """ADMIN: Renew a subscription (must belong to admin's gym)"""
+    subscription = (
+        db.query(Subscription)
+        .join(Member, Subscription.member_id == Member.id)
+        .join(User, Member.user_id == User.id)
+        .filter(
+            Subscription.id == sub_id,
+            User.gym_id == admin.gym_id
+        )
+    ).first()
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found")
     
     plan_id = request.get("plan_id")
     if plan_id:
-        plan = db.query(Plan).filter(Plan.id == plan_id).first()
+        plan = db.query(Plan).filter(Plan.id == plan_id, Plan.gym_id == admin.gym_id).first()
         if not plan:
-            raise HTTPException(status_code=404, detail="Plan not found")
+            raise HTTPException(status_code=404, detail="Plan not found in your gym")
         subscription.plan_id = plan_id
     else:
-        plan = db.query(Plan).filter(Plan.id == subscription.plan_id).first()
+        plan = db.query(Plan).filter(Plan.id == subscription.plan_id, Plan.gym_id == admin.gym_id).first()
         if not plan:
-            raise HTTPException(status_code=404, detail="Plan not found")
+            raise HTTPException(status_code=404, detail="Plan not found in your gym")
     
     new_end_date = subscription.end_date + timedelta(days=plan.duration_days)
     subscription.end_date = new_end_date
@@ -333,10 +369,18 @@ def extend_subscription(
     sub_id: int,
     request: dict,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Extend a subscription by X days"""
-    subscription = db.query(Subscription).filter(Subscription.id == sub_id).first()
+    """ADMIN: Extend a subscription by X days (must belong to admin's gym)"""
+    subscription = (
+        db.query(Subscription)
+        .join(Member, Subscription.member_id == Member.id)
+        .join(User, Member.user_id == User.id)
+        .filter(
+            Subscription.id == sub_id,
+            User.gym_id == admin.gym_id
+        )
+    ).first()
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found")
     
@@ -369,14 +413,21 @@ def extend_subscription(
 def get_expiring_subscriptions(
     days: int = 7,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Get subscriptions expiring within X days"""
+    """ADMIN: Get subscriptions expiring within X days for the admin's gym"""
     target_date = date.today() + timedelta(days=days)
-    subs = db.query(Subscription).filter(
-        Subscription.status == "active",
-        Subscription.end_date <= target_date
-    ).all()
+    subs = (
+        db.query(Subscription)
+        .join(Member, Subscription.member_id == Member.id)
+        .join(User, Member.user_id == User.id)
+        .filter(
+            User.gym_id == admin.gym_id,
+            Subscription.status == "active",
+            Subscription.end_date <= target_date
+        )
+        .all()
+    )
     
     result = []
     for sub in subs:
@@ -398,7 +449,7 @@ def get_expiring_subscriptions(
 
 
 # ============================================================
-# MEMBER ENDPOINTS - FIXED
+# MEMBER ENDPOINTS
 # ============================================================
 
 @router.get("/my", response_model=List[SubscriptionOut])
@@ -502,8 +553,11 @@ def get_plans(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all available subscription plans"""
-    plans = db.query(Plan).filter(Plan.is_active == True).order_by(Plan.price).all()
+    """Get all available subscription plans for the current user's gym"""
+    plans = db.query(Plan).filter(
+        Plan.is_active == True,
+        Plan.gym_id == current_user.gym_id
+    ).order_by(Plan.price).all()
     
     return [PlanOut(
         id=plan.id,
@@ -520,8 +574,12 @@ def get_plan(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get a specific plan by ID"""
-    plan = db.query(Plan).filter(Plan.id == plan_id, Plan.is_active == True).first()
+    """Get a specific plan by ID (must belong to current user's gym)"""
+    plan = db.query(Plan).filter(
+        Plan.id == plan_id,
+        Plan.is_active == True,
+        Plan.gym_id == current_user.gym_id
+    ).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
     
@@ -538,10 +596,11 @@ def get_plan(
 def create_plan(
     data: dict,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Create a new subscription plan"""
+    """ADMIN: Create a new subscription plan for the admin's gym"""
     plan = Plan(
+        gym_id=admin.gym_id,
         name=data.get("name"),
         price=data.get("price"),
         duration_days=data.get("duration_days"),
@@ -566,10 +625,13 @@ def update_plan(
     plan_id: int,
     data: dict,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Update a subscription plan"""
-    plan = db.query(Plan).filter(Plan.id == plan_id).first()
+    """ADMIN: Update a subscription plan (must belong to admin's gym)"""
+    plan = db.query(Plan).filter(
+        Plan.id == plan_id,
+        Plan.gym_id == admin.gym_id
+    ).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
     
@@ -600,10 +662,13 @@ def update_plan(
 def delete_plan(
     plan_id: int,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Soft delete a plan (set inactive)"""
-    plan = db.query(Plan).filter(Plan.id == plan_id).first()
+    """ADMIN: Soft delete a plan (set inactive) - must belong to admin's gym"""
+    plan = db.query(Plan).filter(
+        Plan.id == plan_id,
+        Plan.gym_id == admin.gym_id
+    ).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
     

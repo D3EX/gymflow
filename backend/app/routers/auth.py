@@ -10,7 +10,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
 from ..database import get_db
-from ..models.models import User, Member
+from ..models.models import User, Member, Gym
 from ..schemas.schemas import Token, LoginRequest, UserCreate, UserOut
 from ..utils.auth import verify_password, hash_password, create_access_token, get_current_user, get_password_hash
 from .notifications import notify_admins_new_signup
@@ -28,6 +28,13 @@ class ResetPasswordRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
+class RegisterRequest(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    role: str = "client"
+    gym_id: int  # ✅ NEW: Required gym_id for registration
 
 # Email configuration
 SMTP_SERVER = "smtp.gmail.com"
@@ -93,41 +100,50 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
     }
 
 
-# backend/app/routers/auth.py
-
 @router.post("/register", response_model=UserOut)
-def register(data: UserCreate, db: Session = Depends(get_db)):
+def register(data: RegisterRequest, db: Session = Depends(get_db)):
+    """
+    Register a new user.
+    Requires gym_id to associate the user with a specific gym.
+    """
     print(f"\n{'='*60}")
-    print(f"📝 REGISTER: {data.name} ({data.email})")
+    print(f"REGISTER: {data.name} ({data.email}) for gym {data.gym_id}")
     print(f"{'='*60}")
     
     # Check if email exists
     if db.query(User).filter(User.email == data.email).first():
-        print(f"❌ Email already registered: {data.email}")
+        print(f"Email already registered: {data.email}")
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Create user
+    # Verify the gym exists
+    gym = db.query(Gym).filter(Gym.id == data.gym_id).first()
+    if not gym:
+        print(f"Gym not found: {data.gym_id}")
+        raise HTTPException(status_code=400, detail="Invalid gym ID")
+    
+    # Create user with gym_id
     user = User(
         name=data.name, 
         email=data.email, 
         password=hash_password(data.password), 
-        role=data.role.value if hasattr(data.role, 'value') else data.role
+        role=data.role,
+        gym_id=data.gym_id  # ✅ NEW: Associate with gym
     )
     db.add(user)
     db.commit()
     db.refresh(user)
-    print(f"✅ User created: ID={user.id}, Role={user.role}")
+    print(f"User created: ID={user.id}, Role={user.role}, Gym={user.gym_id}")
     
     # Create member profile for clients
     if user.role == "client":
-        print(f"👤 Creating member profile...")
+        print(f"Creating member profile...")
         member = Member(user_id=user.id, status="pending")
         db.add(member)
         db.commit()
-        print(f"✅ Member created: ID={member.id}, Status={member.status}")
+        print(f"Member created: ID={member.id}, Status={member.status}")
         
-        # 🔔 Send admin notification
-        print(f"🔔 Sending admin notification...")
+        # Send admin notification
+        print(f"Sending admin notification...")
         try:
             from .notifications import notify_admins_new_signup
             result = notify_admins_new_signup(
@@ -135,13 +151,13 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
                 member_name=user.name, 
                 pending_approval=True
             )
-            print(f"✅ Notification sent! {len(result)} notifications created")
+            print(f"Notification sent! {len(result)} notifications created")
         except Exception as e:
-            print(f"❌ Notification error: {e}")
+            print(f"Notification error: {e}")
             import traceback
             traceback.print_exc()
     else:
-        print(f"ℹ️ User is not a client (role={user.role})")
+        print(f"User is not a client (role={user.role})")
     
     print(f"{'='*60}\n")
     return user
@@ -153,7 +169,7 @@ def me(current_user: User = Depends(get_current_user)):
 
 
 # ============================================================
-# ✅ CHANGE PASSWORD - FIXED (PUT method + Pydantic model)
+# CHANGE PASSWORD
 # ============================================================
 
 @router.put("/change-password")
@@ -166,11 +182,11 @@ def change_password(
     Change user password
     Expects: {"current_password": "old", "new_password": "new"}
     """
-    print(f"🔐 Change password request for: {current_user.email}")
+    print(f"Change password request for: {current_user.email}")
     
     # Verify current password
     if not verify_password(request.current_password, current_user.password):
-        print(f"❌ Current password incorrect for {current_user.email}")
+        print(f"Current password incorrect for {current_user.email}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect"
@@ -187,7 +203,7 @@ def change_password(
     current_user.password = get_password_hash(request.new_password)
     db.commit()
     
-    print(f"✅ Password changed successfully for {current_user.email}")
+    print(f"Password changed successfully for {current_user.email}")
     return {"message": "Password changed successfully"}
 
 

@@ -15,6 +15,7 @@ class User(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     password = Column(String, nullable=False)
     role = Column(String, default="client")  # admin, client, coach, receptionist, manager
+    gym_id = Column(Integer, ForeignKey("gyms.id"), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
@@ -32,7 +33,7 @@ class User(Base):
     availability_overrides = relationship("CoachAvailabilityOverride", back_populates="coach")
     coach_breaks = relationship("CoachBreak", back_populates="coach")
     coach_settings = relationship("CoachSettings", back_populates="coach", uselist=False)
-
+    gym = relationship("Gym", back_populates="users")
 
 class Member(Base):
     __tablename__ = "members"
@@ -64,6 +65,7 @@ class Plan(Base):
     __tablename__ = "plans"
     
     id = Column(Integer, primary_key=True, index=True)
+    gym_id = Column(Integer, ForeignKey("gyms.id"), nullable=False)  # NEW
     name = Column(String, nullable=False)
     price = Column(Float, nullable=False)
     duration_days = Column(Integer, nullable=False)
@@ -73,8 +75,7 @@ class Plan(Base):
     
     # Relationships
     subscriptions = relationship("Subscription", back_populates="plan")
-
-
+    gym = relationship("Gym")  # NEW
 class Subscription(Base):
     __tablename__ = "subscriptions"
     
@@ -121,11 +122,12 @@ class Campaign(Base):
     __tablename__ = "campaigns"
     
     id = Column(Integer, primary_key=True, index=True)
+    gym_id = Column(Integer, ForeignKey("gyms.id"), nullable=False)  # NEW
     title = Column(String, nullable=False)
-    type = Column(String, nullable=False)  # email, sms, push
+    type = Column(String, nullable=False)
     content = Column(Text, nullable=False)
-    audience = Column(String, nullable=False)  # all, active, expiring, inactive, vip
-    status = Column(String, default="draft")  # draft, scheduled, sent
+    audience = Column(String, nullable=False)
+    status = Column(String, default="draft")
     sent_count = Column(Integer, default=0)
     opened_count = Column(Integer, default=0)
     clicked_count = Column(Integer, default=0)
@@ -136,6 +138,7 @@ class Campaign(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by = Column(Integer, ForeignKey("users.id"))
 
+    gym = relationship("Gym")  # NEW
 
 # ============================================================
 # NOTIFICATION MODEL
@@ -189,6 +192,7 @@ class Equipment(Base):
     __tablename__ = "equipment"
     
     id = Column(Integer, primary_key=True, index=True)
+    gym_id = Column(Integer, ForeignKey("gyms.id"), nullable=False)
     name = Column(String, nullable=False)
     category = Column(String, nullable=False)  # cardio, strength, free_weights, stretching, other
     quantity = Column(Integer, default=1)
@@ -198,7 +202,7 @@ class Equipment(Base):
     price = Column(Float, default=0)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-
+    gym = relationship("Gym") 
 
 # ============================================================
 # COACH MODELS
@@ -503,6 +507,7 @@ class Class(Base):
     __tablename__ = "classes"
     
     id = Column(Integer, primary_key=True, index=True)
+    gym_id = Column(Integer, ForeignKey("gyms.id"), nullable=False)  # NEW
     name = Column(String(100), nullable=False)
     coach = Column(String(100), nullable=False)
     time = Column(String(20), nullable=False)
@@ -517,8 +522,7 @@ class Class(Base):
     
     # Relationships
     bookings = relationship("ClassBooking", back_populates="class_item", cascade="all, delete-orphan")
-
-
+    gym = relationship("Gym")  # NEW
 class ClassBooking(Base):
     __tablename__ = "class_bookings"
     
@@ -578,3 +582,26 @@ class Message(Base):
     sender = relationship("User", foreign_keys=[sender_id])
     receiver = relationship("User", foreign_keys=[receiver_id])
     member = relationship("Member", foreign_keys=[member_id])
+
+
+class Gym(Base):
+    __tablename__ = "gyms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    owner_email = Column(String, nullable=False)
+    subscription_tier = Column(String, default="basic")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    users = relationship("User", back_populates="gym")
+    __tablename__ = "gyms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    owner_email = Column(String, nullable=False)
+    subscription_tier = Column(String, default="basic")  # basic, pro, enterprise
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    users = relationship("User", back_populates="gym")

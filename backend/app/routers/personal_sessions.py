@@ -261,7 +261,7 @@ def book_personal_session(
     current_user: User = Depends(get_current_user)
 ):
     """Book a personal session with assigned coach"""
-    print(f"📝 Booking request received:")
+    print(f"Booking request received:")
     print(f"  - User: {current_user.id} ({current_user.name})")
     print(f"  - Date: {data.date}")
     print(f"  - Time: {data.time} - {data.end_time}")
@@ -289,9 +289,9 @@ def book_personal_session(
         if not coach:
             raise HTTPException(status_code=404, detail="Assigned coach not found")
 
-        print(f"✅ Coach: {coach.name}")
+        print(f"Coach: {coach.name}")
 
-        # ─── CHECK AVAILABILITY ───
+        # CHECK AVAILABILITY
 
         # 1. Check date-specific override
         date_override = db.query(CoachAvailabilityOverride).filter(
@@ -310,7 +310,7 @@ def book_personal_session(
                     status_code=400,
                     detail=f"Coach is only available from {date_override.start_time} to {date_override.end_time} on this date."
                 )
-            print(f"✅ Using date override: {date_override.start_time} - {date_override.end_time}")
+            print(f"Using date override: {date_override.start_time} - {date_override.end_time}")
         else:
             # 2. Fall back to day-of-week pattern
             day_of_week = data.date.strftime('%A')
@@ -327,7 +327,7 @@ def book_personal_session(
                     detail=f"Coach {coach.name} is not available on {day_of_week}."
                 )
 
-            print(f"✅ Coach available: {coach_availability.start_time} - {coach_availability.end_time}")
+            print(f"Coach available: {coach_availability.start_time} - {coach_availability.end_time}")
 
             if data.time < coach_availability.start_time or data.end_time > coach_availability.end_time:
                 raise HTTPException(
@@ -409,7 +409,7 @@ def book_personal_session(
                 detail="You already have a session at this time"
             )
 
-        # ─── CREATE SESSION ───
+        # CREATE SESSION
 
         # Determine if auto-approval is enabled
         allow_auto_approval = True
@@ -432,9 +432,9 @@ def book_personal_session(
         db.commit()
         db.refresh(session)
 
-        print(f"✅ Session created: ID {session.id} (status: {session_status})")
+        print(f"Session created: ID {session.id} (status: {session_status})")
 
-        # ─── SEND NOTIFICATIONS ───
+        # SEND NOTIFICATIONS
 
         # Notify coach
         coach_notification = Notification(
@@ -481,7 +481,7 @@ def book_personal_session(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
+        print(f"Unexpected error: {e}")
         import traceback
         traceback.print_exc()
         db.rollback()
@@ -497,7 +497,7 @@ def book_recurring_session(
     """
     Book a recurring session that repeats weekly.
     """
-    print(f"📝 Recurring booking request received:")
+    print(f"Recurring booking request received:")
     print(f"  - User: {current_user.id} ({current_user.name})")
     print(f"  - Date: {data.date}")
     print(f"  - Time: {data.time} - {data.end_time}")
@@ -526,7 +526,7 @@ def book_recurring_session(
         if not coach:
             raise HTTPException(status_code=404, detail="Assigned coach not found")
 
-        print(f"✅ Coach: {coach.name}")
+        print(f"Coach: {coach.name}")
 
         # Generate recurring session dates
         recurring_group_id = str(uuid.uuid4())
@@ -642,11 +642,11 @@ def book_recurring_session(
                         session.recurring_parent_id = first_session_id
                     
                     sessions_created.append(session)
-                    print(f"✅ Created session for {current_date}")
+                    print(f"Created session for {current_date}")
                 else:
-                    print(f"⚠️ Skipped {current_date}: Overlap with existing session")
+                    print(f"Skipped {current_date}: Overlap with existing session")
             else:
-                print(f"⚠️ Skipped {current_date}: {skip_reason}")
+                print(f"Skipped {current_date}: {skip_reason}")
 
             # Move to next week
             current_date += timedelta(days=7)
@@ -664,7 +664,7 @@ def book_recurring_session(
         for session in sessions_created:
             db.refresh(session)
 
-        print(f"✅ Created {len(sessions_created)} recurring sessions")
+        print(f"Created {len(sessions_created)} recurring sessions")
 
         # Send notifications
         if sessions_created:
@@ -710,7 +710,7 @@ def book_recurring_session(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
+        print(f"Unexpected error: {e}")
         import traceback
         traceback.print_exc()
         db.rollback()
@@ -912,7 +912,12 @@ def get_coach_sessions(
 ):
     """Get sessions for the current coach with filters"""
     if current_user.role == "admin":
-        query = db.query(PersonalSession)
+        # Admin sees sessions for coaches in their gym
+        query = (
+            db.query(PersonalSession)
+            .join(User, PersonalSession.coach_id == User.id)
+            .filter(User.gym_id == current_user.gym_id)
+        )
     else:
         query = db.query(PersonalSession).filter(
             PersonalSession.coach_id == current_user.id
@@ -960,7 +965,7 @@ def get_coach_sessions(
     return result
 
 
-# ─── APPROVE / REJECT SESSIONS ───
+# APPROVE / REJECT SESSIONS
 
 @router.put("/coach/sessions/{session_id}/approve")
 def approve_session(
@@ -1034,7 +1039,7 @@ def reject_session(
     return {"message": "Session rejected"}
 
 
-# ─── COMPLETE SESSION ───
+# COMPLETE SESSION
 
 @router.put("/coach/sessions/{session_id}/complete")
 def complete_session(
@@ -1060,7 +1065,7 @@ def complete_session(
     return {"message": "Session marked as completed"}
 
 
-# ─── CANCEL SESSION (COACH) ───
+# CANCEL SESSION (COACH)
 
 @router.put("/coach/sessions/{session_id}/cancel")
 def coach_cancel_session(
@@ -1100,7 +1105,7 @@ def coach_cancel_session(
     return {"message": "Session cancelled successfully"}
 
 
-# ─── RESCHEDULE SESSION ───
+# RESCHEDULE SESSION
 
 @router.put("/coach/sessions/{session_id}/reschedule")
 def reschedule_session(
@@ -1194,7 +1199,7 @@ def reschedule_session(
     }
 
 
-# ─── ADD COACH NOTES ───
+# ADD COACH NOTES
 
 @router.put("/coach/sessions/{session_id}/notes")
 def add_coach_notes(
@@ -1217,7 +1222,7 @@ def add_coach_notes(
     return {"message": "Coach notes added successfully"}
 
 
-# ─── ADD CLIENT NOTES ───
+# ADD CLIENT NOTES
 
 @router.put("/coach/sessions/{session_id}/client-notes")
 def add_client_notes(
@@ -1251,7 +1256,7 @@ def add_client_notes(
     return {"message": "Client notes added successfully"}
 
 
-# ─── ADD FEEDBACK ───
+# ADD FEEDBACK
 
 @router.put("/coach/sessions/{session_id}/feedback")
 def add_session_feedback(
@@ -1278,7 +1283,7 @@ def add_session_feedback(
     return {"message": "Feedback added successfully"}
 
 
-# ─── GET SESSION DETAIL ───
+# GET SESSION DETAIL
 
 @router.get("/coach/sessions/{session_id}")
 def get_session_detail(
@@ -1337,9 +1342,13 @@ def get_coach_breaks(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(["coach", "admin"]))
 ):
-    """Get all breaks for the current coach"""
+    """Get all breaks for coaches in the admin's gym"""
     if current_user.role == "admin":
-        breaks = db.query(CoachBreak).all()
+        breaks = (
+            db.query(CoachBreak)
+            .join(User, CoachBreak.coach_id == User.id)
+            .filter(User.gym_id == current_user.gym_id)
+        ).all()
     else:
         breaks = db.query(CoachBreak).filter(
             CoachBreak.coach_id == current_user.id,
@@ -1558,7 +1567,7 @@ def get_coach_booked_sessions_admin(
 ):
     """
     COACH/ADMIN: Get booked sessions for the current coach on a specific date.
-    Admin sees all sessions across all coaches.
+    Admin sees all sessions across all coaches in their gym.
     """
     try:
         session_date = datetime.strptime(date, '%Y-%m-%d').date()
@@ -1566,9 +1575,15 @@ def get_coach_booked_sessions_admin(
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
 
     if current_user.role == "admin":
-        sessions = db.query(PersonalSession).filter(
-            PersonalSession.date == session_date,
-            PersonalSession.status.in_(["scheduled", "pending", "approved"])
+        # Admin sees all sessions in their gym
+        sessions = (
+            db.query(PersonalSession)
+            .join(User, PersonalSession.coach_id == User.id)
+            .filter(
+                User.gym_id == current_user.gym_id,
+                PersonalSession.date == session_date,
+                PersonalSession.status.in_(["scheduled", "pending", "approved"])
+            )
         ).all()
     else:
         sessions = db.query(PersonalSession).filter(
@@ -1607,14 +1622,14 @@ def get_coach_booked_sessions(
     specific date. Includes sessions from other members — used to grey out
     already-taken slots in the booking UI.
     """
-    print(f"\n🔍 GET COACH BOOKED SESSIONS")
+    print(f"\nGET COACH BOOKED SESSIONS")
     print(f"  Date: {date}")
     print(f"  User: {current_user.id} ({current_user.email})")
     print(f"  Role: {current_user.role}")
 
     member = db.query(Member).filter(Member.user_id == current_user.id).first()
     if not member:
-        print(f"  ❌ Member not found for user {current_user.id}")
+        print(f"  Member not found for user {current_user.id}")
         raise HTTPException(status_code=404, detail="Member profile not found")
 
     print(f"  Member ID: {member.id}")
@@ -1626,7 +1641,7 @@ def get_coach_booked_sessions(
     ).first()
 
     if not coach_assignment:
-        print(f"  ❌ No active coach assignment found")
+        print(f"  No active coach assignment found")
         return []
 
     coach_id = coach_assignment.coach_id
@@ -1636,7 +1651,7 @@ def get_coach_booked_sessions(
         session_date = datetime.strptime(date, '%Y-%m-%d').date()
         print(f"  Parsed date: {session_date}")
     except ValueError:
-        print(f"  ❌ Invalid date format: {date}")
+        print(f"  Invalid date format: {date}")
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
 
     booked_sessions = db.query(PersonalSession).filter(
@@ -1646,8 +1661,6 @@ def get_coach_booked_sessions(
     ).all()
 
     print(f"  Found {len(booked_sessions)} booked sessions")
-    for s in booked_sessions:
-        print(f"    - Time: {s.time} - {s.end_time}, Client ID: {s.client_id}")
 
     result = []
     for session in booked_sessions:
@@ -1659,7 +1672,7 @@ def get_coach_booked_sessions(
             "status": session.status
         })
 
-    print(f"  ✅ Returning {len(result)} booked slots")
+    print(f"  Returning {len(result)} booked slots")
     return result
 
 
@@ -1673,10 +1686,14 @@ def get_coach_availability_overrides(
     current_user: User = Depends(require_role(["coach", "admin"]))
 ):
     """
-    Get all date-specific availability overrides for the current coach.
+    Get all date-specific availability overrides for coaches in the admin's gym.
     """
     if current_user.role == "admin":
-        overrides = db.query(CoachAvailabilityOverride).all()
+        overrides = (
+            db.query(CoachAvailabilityOverride)
+            .join(User, CoachAvailabilityOverride.coach_id == User.id)
+            .filter(User.gym_id == current_user.gym_id)
+        ).all()
     else:
         overrides = db.query(CoachAvailabilityOverride).filter(
             CoachAvailabilityOverride.coach_id == current_user.id
@@ -1709,6 +1726,10 @@ def create_coach_availability_override(
     if current_user.role == "coach":
         coach_id = current_user.id
     else:
+        # Admin must verify coach is in their gym
+        coach = db.query(User).filter(User.id == data.coach_id, User.gym_id == current_user.gym_id).first()
+        if not coach:
+            raise HTTPException(status_code=404, detail="Coach not found in your gym")
         coach_id = data.coach_id
 
     # Check if override already exists for this date
@@ -1774,6 +1795,11 @@ def update_coach_availability_override(
 
     if current_user.role == "coach" and override.coach_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
+    elif current_user.role == "admin":
+        # Admin must verify coach is in their gym
+        coach = db.query(User).filter(User.id == override.coach_id, User.gym_id == current_user.gym_id).first()
+        if not coach:
+            raise HTTPException(status_code=404, detail="Coach not found in your gym")
 
     if data.start_time is not None:
         override.start_time = data.start_time
@@ -1813,6 +1839,11 @@ def delete_coach_availability_override(
 
     if current_user.role == "coach" and override.coach_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
+    elif current_user.role == "admin":
+        # Admin must verify coach is in their gym
+        coach = db.query(User).filter(User.id == override.coach_id, User.gym_id == current_user.gym_id).first()
+        if not coach:
+            raise HTTPException(status_code=404, detail="Coach not found in your gym")
 
     db.delete(override)
     db.commit()

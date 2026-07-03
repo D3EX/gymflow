@@ -9,7 +9,8 @@ import {
   UserCircle, Wrench, Megaphone, UserCheck, Crown, User, DollarSign,
   Apple, Activity, PanelLeftClose, PanelLeftOpen, X, Clock, UserPlus,
   FileText, ClipboardList, MessageSquare, Send, Check, CheckCheck,
-  Paperclip, MoreVertical, Phone, Video, Info, Smile, File
+  Paperclip, MoreVertical, Phone, Video, Info, Smile, File,
+  Building  // ← ADDED THIS
 } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { useTheme } from '../contexts/ThemeContext'
@@ -856,6 +857,7 @@ export default function Layout() {
   const searchTimeoutRef = useRef(null)
 
   const isAdmin = user?.role === 'admin'
+  const isSuperAdmin = user?.role === 'super_admin'  // ← ADDED THIS
   const isCoach = user?.role === 'coach'
   const isClient = user?.role === 'client'
   
@@ -1242,6 +1244,19 @@ export default function Layout() {
     { title: 'SYSTEM', items: [{ path: '/dashboard/settings', label: 'Settings', icon: Settings }] }
   ]
 
+  // ─── SUPER ADMIN NAV GROUPS ───
+  const superAdminNavGroups = [
+  { title: 'MAIN', items: [{ path: '/dashboard/super-admin', label: 'Dashboard', icon: LayoutDashboard }] },
+  {
+    title: 'MANAGEMENT',
+    items: [
+      { path: '/dashboard/super-admin/gyms', label: 'Gyms', icon: Building },
+      { path: '/dashboard/super-admin/tiers', label: 'Plans & Tiers', icon: Crown },
+    ]
+  },
+  { title: 'SYSTEM', items: [{ path: '/dashboard/super-admin/settings', label: 'Settings', icon: Settings }] }
+]
+
   const coachNavGroups = [
     { title: 'MAIN', items: [{ path: '/coach', label: 'Dashboard', icon: LayoutDashboard }] },
     {
@@ -1296,17 +1311,24 @@ export default function Layout() {
     '/dashboard/settings': 'Settings'
   }
 
-const coachPageTitles = {
-  '/coach': 'Dashboard',
-  '/coach/clients': 'My Clients',
-  '/coach/clients/:id': 'Client Detail',
-  '/coach/programs': 'Programs',
-  '/coach/classes': 'My Classes',
-  '/coach/messages': 'Messages',
-  '/coach/availability': 'Availability',
-  '/coach/profile': 'Profile',
-  '/coach/settings': 'Settings'
+  const superAdminPageTitles = {
+  '/dashboard/super-admin': 'Gym Management',
+  '/dashboard/super-admin/gyms': 'Gyms',
+  '/dashboard/super-admin/tiers': 'Plans & Tiers',
+  '/dashboard/super-admin/settings': 'Settings'
 }
+
+  const coachPageTitles = {
+    '/coach': 'Dashboard',
+    '/coach/clients': 'My Clients',
+    '/coach/clients/:id': 'Client Detail',
+    '/coach/programs': 'Programs',
+    '/coach/classes': 'My Classes',
+    '/coach/messages': 'Messages',
+    '/coach/availability': 'Availability',
+    '/coach/profile': 'Profile',
+    '/coach/settings': 'Settings'
+  }
 
   const memberPageTitles = {
     '/member': 'Dashboard',
@@ -1326,7 +1348,12 @@ const coachPageTitles = {
   let roleDisplay = 'Administrator'
   let dashboardPath = '/dashboard'
 
-  if (isCoach) {
+  if (isSuperAdmin) {
+    navGroups = superAdminNavGroups
+    pageTitles = superAdminPageTitles
+    roleDisplay = 'Super Admin'
+    dashboardPath = '/dashboard/super-admin'
+  } else if (isCoach) {
     navGroups = coachNavGroups
     pageTitles = coachPageTitles
     roleDisplay = 'Coach'
@@ -1339,7 +1366,7 @@ const coachPageTitles = {
   }
 
   const currentPage = pageTitles[location.pathname] || 'Dashboard'
-  const basePath = isAdmin ? '/dashboard' : isCoach ? '/coach' : '/member'
+  const basePath = isSuperAdmin ? '/dashboard/super-admin' : isAdmin ? '/dashboard' : isCoach ? '/coach' : '/member'
 
   // Chat functions
   const formatChatTime = (iso) => {
@@ -1650,7 +1677,7 @@ const coachPageTitles = {
             {!isCollapsed && (
               <div style={{ minWidth: 0, overflow: 'hidden' }}>
                 <div style={{ fontSize: '15px', fontWeight: 800, color: COLORS.text, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>GymFlow</div>
-                <div style={{ fontSize: '10.5px', color: COLORS.text3, fontWeight: 600, whiteSpace: 'nowrap' }}>{isAdmin ? 'Admin Panel' : isCoach ? 'Coach Portal' : 'Member Portal'}</div>
+                <div style={{ fontSize: '10.5px', color: COLORS.text3, fontWeight: 600, whiteSpace: 'nowrap' }}>{isSuperAdmin ? 'Super Admin' : isAdmin ? 'Admin Panel' : isCoach ? 'Coach Portal' : 'Member Portal'}</div>
               </div>
             )}
           </div>
@@ -1684,10 +1711,13 @@ const coachPageTitles = {
               )}
               {group.items.map((item) => {
                 const Icon = item.icon
-                const isRootPath = item.path === '/dashboard' || item.path === '/coach' || item.path === '/member'
+                const isRootPath = item.path === '/dashboard' || item.path === '/coach' || item.path === '/member' || item.path === '/dashboard/super-admin'
+                
+                // ✅ FIX: Only the exact root page gets active for root paths
                 const isActive = isRootPath 
                   ? location.pathname === item.path
                   : location.pathname.startsWith(item.path)
+
                 const hasBadge = Number(item.badge) > 0
                 return (
                   <Link
@@ -1846,7 +1876,7 @@ const coachPageTitles = {
               </FlatIconButton>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '6px', fontSize: '13px' }}>
                 <Link to={basePath} className="crumb-link" style={{ color: COLORS.text3, fontWeight: 500, textDecoration: 'none' }}>
-                  {isAdmin ? 'Admin' : isCoach ? 'Coach' : 'Member'}
+                  {isSuperAdmin ? 'Super Admin' : isAdmin ? 'Admin' : isCoach ? 'Coach' : 'Member'}
                 </Link>
                 <span style={{ color: COLORS.text3 }}>/</span>
                 <span style={{ color: COLORS.text, fontWeight: 700 }}>{currentPage}</span>

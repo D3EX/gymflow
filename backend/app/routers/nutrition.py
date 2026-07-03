@@ -23,21 +23,30 @@ router = APIRouter(prefix="/api/nutrition", tags=["Nutrition"])
 def get_all_meal_plans(
     member_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Get all meal plans, optionally filtered by member"""
-    query = db.query(MealPlan)
+    """ADMIN: Get all meal plans for members in the admin's gym"""
+    query = (
+        db.query(MealPlan)
+        .join(Member, MealPlan.member_id == Member.id)
+        .join(User, Member.user_id == User.id)
+        .filter(User.gym_id == admin.gym_id)
+    )
     if member_id:
+        # Verify the member belongs to the admin's gym
+        member = db.query(Member).join(User, Member.user_id == User.id).filter(
+            Member.id == member_id,
+            User.gym_id == admin.gym_id
+        ).first()
+        if not member:
+            raise HTTPException(status_code=404, detail="Member not found in your gym")
         query = query.filter(MealPlan.member_id == member_id)
     return query.order_by(MealPlan.created_at.desc()).all()
 
 
 # ============================================================
 # MEMBER ENDPOINTS - literal "/my*" paths MUST be declared
-# before "/{meal_plan_id}" below, or Starlette will match
-# "/my" as meal_plan_id="my" and dispatch to the admin route
-# instead (same bug class as payments.py: it would force
-# require_admin to run on /api/nutrition/my and return 403).
+# before "/{meal_plan_id}" below
 # ============================================================
 
 @router.get("/my", response_model=MealPlanOut)
@@ -194,7 +203,7 @@ def update_water(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """MEMBER: Log water intake for a specific day (sets the day's running total, in liters)"""
+    """MEMBER: Log water intake for a specific day"""
     member = db.query(Member).filter(Member.user_id == current_user.id).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
@@ -372,10 +381,18 @@ def delete_meal(
 def get_meal_plan(
     meal_plan_id: int,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Get a specific meal plan"""
-    meal_plan = db.query(MealPlan).filter(MealPlan.id == meal_plan_id).first()
+    """ADMIN: Get a specific meal plan (must belong to a member in the admin's gym)"""
+    meal_plan = (
+        db.query(MealPlan)
+        .join(Member, MealPlan.member_id == Member.id)
+        .join(User, Member.user_id == User.id)
+        .filter(
+            MealPlan.id == meal_plan_id,
+            User.gym_id == admin.gym_id
+        )
+    ).first()
     if not meal_plan:
         raise HTTPException(status_code=404, detail="Meal plan not found")
     return meal_plan
@@ -385,10 +402,18 @@ def get_meal_plan(
 def delete_meal_plan(
     meal_plan_id: int,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Delete a meal plan"""
-    meal_plan = db.query(MealPlan).filter(MealPlan.id == meal_plan_id).first()
+    """ADMIN: Delete a meal plan (must belong to a member in the admin's gym)"""
+    meal_plan = (
+        db.query(MealPlan)
+        .join(Member, MealPlan.member_id == Member.id)
+        .join(User, Member.user_id == User.id)
+        .filter(
+            MealPlan.id == meal_plan_id,
+            User.gym_id == admin.gym_id
+        )
+    ).first()
     if not meal_plan:
         raise HTTPException(status_code=404, detail="Meal plan not found")
 

@@ -26,6 +26,12 @@ import Reports from './pages/admin/Reports'
 import Settings from './pages/admin/Settings'
 import Classes from './pages/admin/Classes'
 
+// Super Admin Page
+import SuperAdmin from './pages/super-admin/SuperAdmin'
+import Gyms from './pages/super-admin/Gyms'
+import PlansAndTiers from './pages/super-admin/PlansAndTiers'
+import SuperAdminSettings from './pages/super-admin/Settings'
+
 // Member Pages
 import MemberDashboard from './pages/member/Dashboard'
 import MemberProfilePage from './pages/member/Profile'
@@ -92,6 +98,16 @@ function App() {
               <Route path="settings" element={<Settings />} />
               <Route path="classes" element={<Classes />} />
             </Route>
+          </Route>
+
+          {/* SUPER ADMIN ROUTE - Protected */}
+          <Route path="/dashboard/super-admin" element={<ProtectedRoute allowedRoles={['super_admin']} />}>
+             <Route element={<Layout />}>
+              <Route index element={<SuperAdmin />} />
+              <Route path="gyms" element={<Gyms />} />
+              <Route path="tiers" element={<PlansAndTiers />} />
+              <Route path="settings" element={<SuperAdminSettings />} />
+             </Route>
           </Route>
 
           {/* COACH ROUTES - Protected */}

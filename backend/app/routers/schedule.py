@@ -6,7 +6,7 @@ from sqlalchemy import func, or_
 from typing import List, Optional
 from datetime import date, datetime
 from ..database import get_db
-from ..models.models import User, Member, Class, ClassBooking
+from ..models.models import User, Member, Class, ClassBooking, Gym
 from ..schemas.schemas import (
     ClassCreate, ClassUpdate, ClassOut,
     ClassBookingCreate, ClassBookingOut
@@ -33,10 +33,16 @@ def create_class(
     if current_user.role == "coach":
         data.coach = current_user.name
     
-    # Check if coach already has a class at this time
+    # Verify the gym exists (sanity check)
+    gym = db.query(Gym).filter(Gym.id == current_user.gym_id).first()
+    if not gym:
+        raise HTTPException(status_code=400, detail="User not associated with a gym")
+    
+    # Check if coach already has a class at this time in the same gym
     existing_class = db.query(Class).filter(
         Class.coach == data.coach,
         Class.day_of_week == data.day_of_week,
+        Class.gym_id == current_user.gym_id,
         Class.is_active == True,
         or_(
             (data.time >= Class.time) & (data.time < Class.end_time),
@@ -51,8 +57,9 @@ def create_class(
             detail=f"You already have a class '{existing_class.name}' at {existing_class.time} on {data.day_of_week}"
         )
     
-    # Create the class
+    # Create the class with gym_id
     cls = Class(
+        gym_id=current_user.gym_id,
         name=data.name,
         coach=data.coach,
         time=data.time,
@@ -88,10 +95,10 @@ def create_class(
 @router.get("/classes/admin", response_model=List[ClassOut])
 def get_all_classes_admin(
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Get all classes (including inactive)"""
-    classes = db.query(Class).order_by(Class.day_of_week, Class.time).all()
+    """ADMIN: Get all classes for the admin's gym (including inactive)"""
+    classes = db.query(Class).filter(Class.gym_id == admin.gym_id).order_by(Class.day_of_week, Class.time).all()
     
     result = []
     for cls in classes:
@@ -128,10 +135,16 @@ def get_coach_classes(
     Get classes for the current coach
     """
     if current_user.role == "admin":
-        classes = db.query(Class).filter(Class.is_active == True).order_by(Class.day_of_week, Class.time).all()
+        # Admin sees all active classes in their gym
+        classes = db.query(Class).filter(
+            Class.gym_id == current_user.gym_id,
+            Class.is_active == True
+        ).order_by(Class.day_of_week, Class.time).all()
     else:
+        # Coach sees only their own classes
         classes = db.query(Class).filter(
             Class.coach == current_user.name,
+            Class.gym_id == current_user.gym_id,
             Class.is_active == True
         ).order_by(Class.day_of_week, Class.time).all()
     
@@ -169,9 +182,12 @@ def update_class(
     current_user: User = Depends(require_role(["admin", "coach"]))
 ):
     """
-    Update a class - Admin can update any, Coach can update their own
+    Update a class - Admin can update any in their gym, Coach can update their own
     """
-    cls = db.query(Class).filter(Class.id == class_id).first()
+    cls = db.query(Class).filter(
+        Class.id == class_id,
+        Class.gym_id == current_user.gym_id
+    ).first()
     if not cls:
         raise HTTPException(status_code=404, detail="Class not found")
     
@@ -196,6 +212,7 @@ def update_class(
             Class.id != class_id,
             Class.coach == coach_name,
             Class.day_of_week == check_day,
+            Class.gym_id == current_user.gym_id,
             Class.is_active == True,
             or_(
                 (check_time >= Class.time) & (check_time < Class.end_time),
@@ -264,9 +281,12 @@ def delete_class(
     current_user: User = Depends(require_role(["admin", "coach"]))
 ):
     """
-    Delete a class - Admin can delete any, Coach can delete their own
+    Delete a class - Admin can delete any in their gym, Coach can delete their own
     """
-    cls = db.query(Class).filter(Class.id == class_id).first()
+    cls = db.query(Class).filter(
+        Class.id == class_id,
+        Class.gym_id == current_user.gym_id
+    ).first()
     if not cls:
         raise HTTPException(status_code=404, detail="Class not found")
     
@@ -290,9 +310,12 @@ def get_classes(
     current_user: User = Depends(get_current_user)
 ):
     """
-    MEMBER: Get all available classes with real-time booking count
+    MEMBER: Get all available classes in the member's gym with real-time booking count
     """
-    query = db.query(Class).filter(Class.is_active == True)
+    query = db.query(Class).filter(
+        Class.gym_id == current_user.gym_id,
+        Class.is_active == True
+    )
     
     if day_of_week:
         query = query.filter(Class.day_of_week == day_of_week)
@@ -333,8 +356,12 @@ def get_class(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """MEMBER: Get a single class with booking count"""
-    cls = db.query(Class).filter(Class.id == class_id, Class.is_active == True).first()
+    """MEMBER: Get a single class in the member's gym with booking count"""
+    cls = db.query(Class).filter(
+        Class.id == class_id,
+        Class.gym_id == current_user.gym_id,
+        Class.is_active == True
+    ).first()
     if not cls:
         raise HTTPException(status_code=404, detail="Class not found")
     
@@ -363,7 +390,7 @@ def get_class(
 
 
 # ============================================================
-# BOOKINGS ENDPOINTS - ✅ ADD THIS
+# BOOKINGS ENDPOINTS
 # ============================================================
 
 @router.get("/classes/{class_id}/bookings")
@@ -375,8 +402,11 @@ def get_class_bookings(
     """
     Get all bookings for a specific class
     """
-    # Check if class exists
-    cls = db.query(Class).filter(Class.id == class_id).first()
+    # Check if class exists in the user's gym
+    cls = db.query(Class).filter(
+        Class.id == class_id,
+        Class.gym_id == current_user.gym_id
+    ).first()
     if not cls:
         raise HTTPException(status_code=404, detail="Class not found")
     
@@ -427,7 +457,10 @@ def get_my_bookings(
     
     result = []
     for booking in bookings:
-        cls = db.query(Class).filter(Class.id == booking.class_id).first()
+        cls = db.query(Class).filter(
+            Class.id == booking.class_id,
+            Class.gym_id == current_user.gym_id
+        ).first()
         if cls:
             result.append(ClassBookingOut(
                 id=booking.id,
@@ -462,13 +495,17 @@ def book_class(
     current_user: User = Depends(get_current_user)
 ):
     """
-    MEMBER: Book a class
+    MEMBER: Book a class in the member's gym
     """
     member = db.query(Member).filter(Member.user_id == current_user.id).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member profile not found")
     
-    cls = db.query(Class).filter(Class.id == class_id, Class.is_active == True).first()
+    cls = db.query(Class).filter(
+        Class.id == class_id,
+        Class.gym_id == current_user.gym_id,
+        Class.is_active == True
+    ).first()
     if not cls:
         raise HTTPException(status_code=404, detail="Class not found")
     
@@ -504,7 +541,7 @@ def book_class(
     
     return {
         "success": True,
-        "message": "Class booked successfully! 🎉",
+        "message": "Class booked successfully!",
         "class_id": class_id,
         "class_name": cls.name,
         "spots_left": spots_left
@@ -523,6 +560,14 @@ def cancel_booking(
     member = db.query(Member).filter(Member.user_id == current_user.id).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member profile not found")
+    
+    # Verify the class exists in the member's gym
+    cls = db.query(Class).filter(
+        Class.id == class_id,
+        Class.gym_id == current_user.gym_id
+    ).first()
+    if not cls:
+        raise HTTPException(status_code=404, detail="Class not found")
     
     booking = db.query(ClassBooking).filter(
         ClassBooking.class_id == class_id,
@@ -550,10 +595,16 @@ def cancel_booking(
 @router.get("/bookings")
 def get_all_bookings(
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Get all class bookings"""
-    bookings = db.query(ClassBooking).order_by(ClassBooking.booked_at.desc()).all()
+    """ADMIN: Get all class bookings for the admin's gym"""
+    bookings = (
+        db.query(ClassBooking)
+        .join(Class, ClassBooking.class_id == Class.id)
+        .filter(Class.gym_id == admin.gym_id)
+        .order_by(ClassBooking.booked_at.desc())
+        .all()
+    )
     
     result = []
     for booking in bookings:
@@ -576,9 +627,17 @@ def get_all_bookings(
 def get_member_bookings_admin(
     member_id: int,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Get all bookings for a specific member"""
+    """ADMIN: Get all bookings for a specific member in the admin's gym"""
+    # Verify member belongs to admin's gym
+    member = db.query(Member).join(User, Member.user_id == User.id).filter(
+        Member.id == member_id,
+        User.gym_id == admin.gym_id
+    ).first()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found in your gym")
+    
     bookings = db.query(ClassBooking).filter(
         ClassBooking.member_id == member_id
     ).order_by(ClassBooking.booked_at.desc()).all()

@@ -29,8 +29,26 @@ def _require_coach_client_link(
     coach_user_id: int,
     member_id: int,
     db: Session,
+    current_user_gym_id: int
 ) -> None:
-    """Raise 403 if no active CoachClient assignment exists."""
+    """Raise 403 if no active CoachClient assignment exists and both are in same gym."""
+    # Verify coach belongs to the same gym as the current user
+    coach = db.query(User).filter(User.id == coach_user_id, User.gym_id == current_user_gym_id).first()
+    if not coach:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Coach not found in your gym.",
+        )
+    
+    # Verify member belongs to the same gym
+    member = db.query(Member).join(User, Member.user_id == User.id).filter(Member.id == member_id, User.gym_id == current_user_gym_id).first()
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Member not found in your gym.",
+        )
+    
+    # Verify coach-client assignment exists
     link = db.query(CoachClient).filter(
         CoachClient.coach_id == coach_user_id,
         CoachClient.client_id == member_id,
@@ -104,13 +122,15 @@ def coach_get_conversations(
         raise HTTPException(status_code=403, detail="Coaches only.")
 
     # Find all clients assigned to this coach (active, approved),
-    # not just the ones we've already exchanged messages with.
+    # and ensure they belong to the same gym
     links = (
         db.query(CoachClient)
+        .join(User, CoachClient.coach_id == User.id)
         .filter(
             CoachClient.coach_id == current_user.id,
             CoachClient.is_active == True,
             CoachClient.status == "approved",
+            User.gym_id == current_user.gym_id
         )
         .all()
     )
@@ -182,7 +202,6 @@ def coach_unread_count(
     return {"unread": count or 0}
 
 
-
 @router.get("/coach/conversation/{member_id}", response_model=List[MessageOut])
 def coach_get_conversation(
     member_id: int,
@@ -193,7 +212,7 @@ def coach_get_conversation(
     if current_user.role not in ("coach", "admin"):
         raise HTTPException(status_code=403, detail="Coaches only.")
 
-    _require_coach_client_link(current_user.id, member_id, db)
+    _require_coach_client_link(current_user.id, member_id, db, current_user.gym_id)
 
     messages = (
         db.query(Message)
@@ -225,7 +244,7 @@ def coach_send_message(
     if current_user.role not in ("coach", "admin"):
         raise HTTPException(status_code=403, detail="Coaches only.")
 
-    _require_coach_client_link(current_user.id, member_id, db)
+    _require_coach_client_link(current_user.id, member_id, db, current_user.gym_id)
 
     member: Member = db.query(Member).filter(Member.id == member_id).first()
     if not member:
@@ -254,6 +273,8 @@ def coach_mark_read(
     if current_user.role not in ("coach", "admin"):
         raise HTTPException(status_code=403, detail="Coaches only.")
 
+    _require_coach_client_link(current_user.id, member_id, db, current_user.gym_id)
+
     db.query(Message).filter(
         Message.coach_user_id == current_user.id,
         Message.member_id == member_id,
@@ -272,6 +293,7 @@ def _get_member_and_coach(
     """
     Resolve the Member record and their assigned coach's User record.
     Raises 404 if the member profile or coach assignment is missing.
+    Ensures both are in the same gym.
     """
     member: Member = (
         db.query(Member).filter(Member.user_id == current_user.id).first()
@@ -281,10 +303,12 @@ def _get_member_and_coach(
 
     link: CoachClient = (
         db.query(CoachClient)
+        .join(User, CoachClient.coach_id == User.id)
         .filter(
             CoachClient.client_id == member.id,
             CoachClient.is_active == True,
             CoachClient.status == "approved",
+            User.gym_id == current_user.gym_id
         )
         .first()
     )
@@ -294,7 +318,7 @@ def _get_member_and_coach(
             detail="No assigned coach found. Contact the gym admin.",
         )
 
-    coach: User = db.query(User).filter(User.id == link.coach_id).first()
+    coach: User = db.query(User).filter(User.id == link.coach_id, User.gym_id == current_user.gym_id).first()
     if not coach:
         raise HTTPException(status_code=404, detail="Coach account not found.")
 
@@ -454,7 +478,7 @@ def coach_upload_attachment(
     """Coach sends a file attachment to a client."""
     if current_user.role not in ("coach", "admin"):
         raise HTTPException(status_code=403, detail="Coaches only.")
-    _require_coach_client_link(current_user.id, member_id, db)
+    _require_coach_client_link(current_user.id, member_id, db, current_user.gym_id)
     member: Member = db.query(Member).filter(Member.id == member_id).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found.")
@@ -536,5 +560,5 @@ def delete_message(
     """Soft-delete your own message."""
     msg = _get_own_message(message_id, current_user, db)
     msg.is_deleted = True
-    msg.content = ""          # clear content server-side too
+    msg.content = ""
     db.commit()

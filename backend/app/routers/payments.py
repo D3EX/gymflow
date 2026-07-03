@@ -21,10 +21,15 @@ router = APIRouter(prefix="/api/payments", tags=["Payments"])
 def get_payments(
     status: Optional[str] = None,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Get all payments"""
-    query = db.query(Payment)
+    """ADMIN: Get all payments for members in the admin's gym"""
+    query = (
+        db.query(Payment)
+        .join(Member, Payment.member_id == Member.id)
+        .join(User, Member.user_id == User.id)
+        .filter(User.gym_id == admin.gym_id)
+    )
     if status:
         query = query.filter(Payment.status == status)
     return query.order_by(Payment.created_at.desc()).all()
@@ -34,17 +39,22 @@ def get_payments(
 def monthly_revenue(
     year: Optional[int] = None,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Get monthly revenue"""
+    """ADMIN: Get monthly revenue for the admin's gym"""
     year = year or datetime.now().year
     results = (
         db.query(
             extract("month", Payment.payment_date).label("month"),
             func.sum(Payment.amount).label("total"),
         )
-        .filter(Payment.status == "paid")
-        .filter(extract("year", Payment.payment_date) == year)
+        .join(Member, Payment.member_id == Member.id)
+        .join(User, Member.user_id == User.id)
+        .filter(
+            Payment.status == "paid",
+            User.gym_id == admin.gym_id,
+            extract("year", Payment.payment_date) == year
+        )
         .group_by("month")
         .order_by("month")
         .all()
@@ -56,12 +66,20 @@ def monthly_revenue(
 @router.get("/stats")
 def get_payment_stats(
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Get payment statistics"""
-    total_paid = db.query(func.sum(Payment.amount)).filter(Payment.status == "paid").scalar() or 0
-    total_pending = db.query(func.sum(Payment.amount)).filter(Payment.status == "pending").scalar() or 0
-    total_overdue = db.query(func.sum(Payment.amount)).filter(Payment.status == "overdue").scalar() or 0
+    """ADMIN: Get payment statistics for the admin's gym"""
+    # Base query scoped to admin's gym
+    base = (
+        db.query(Payment)
+        .join(Member, Payment.member_id == Member.id)
+        .join(User, Member.user_id == User.id)
+        .filter(User.gym_id == admin.gym_id)
+    )
+    
+    total_paid = base.filter(Payment.status == "paid").with_entities(func.sum(Payment.amount)).scalar() or 0
+    total_pending = base.filter(Payment.status == "pending").with_entities(func.sum(Payment.amount)).scalar() or 0
+    total_overdue = base.filter(Payment.status == "overdue").with_entities(func.sum(Payment.amount)).scalar() or 0
 
     return {
         "total_paid": float(total_paid),
@@ -152,12 +170,16 @@ def my_payment_status(
 def create_payment(
     data: PaymentCreate,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Create a new payment"""
-    member = db.query(Member).filter(Member.id == data.member_id).first()
+    """ADMIN: Create a new payment for a member in the admin's gym"""
+    # Verify member belongs to admin's gym
+    member = db.query(Member).join(User, Member.user_id == User.id).filter(
+        Member.id == data.member_id,
+        User.gym_id == admin.gym_id
+    ).first()
     if not member:
-        raise HTTPException(status_code=404, detail="Member not found")
+        raise HTTPException(status_code=404, detail="Member not found in your gym")
     
     payment = Payment(**data.model_dump())
     db.add(payment)
@@ -192,10 +214,19 @@ def update_payment(
     payment_id: int,
     data: PaymentUpdate,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Update a payment"""
-    payment = db.query(Payment).filter(Payment.id == payment_id).first()
+    """ADMIN: Update a payment (must belong to a member in the admin's gym)"""
+    # Verify payment belongs to a member in the admin's gym
+    payment = (
+        db.query(Payment)
+        .join(Member, Payment.member_id == Member.id)
+        .join(User, Member.user_id == User.id)
+        .filter(
+            Payment.id == payment_id,
+            User.gym_id == admin.gym_id
+        )
+    ).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
     
@@ -240,10 +271,19 @@ def update_payment(
 def delete_payment(
     payment_id: int,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Delete a payment"""
-    payment = db.query(Payment).filter(Payment.id == payment_id).first()
+    """ADMIN: Delete a payment (must belong to a member in the admin's gym)"""
+    # Verify payment belongs to a member in the admin's gym
+    payment = (
+        db.query(Payment)
+        .join(Member, Payment.member_id == Member.id)
+        .join(User, Member.user_id == User.id)
+        .filter(
+            Payment.id == payment_id,
+            User.gym_id == admin.gym_id
+        )
+    ).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
     db.delete(payment)
@@ -259,10 +299,19 @@ def delete_payment(
 def confirm_payment(
     payment_id: int,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """ADMIN: Confirm a payment (mark as paid)"""
-    payment = db.query(Payment).filter(Payment.id == payment_id).first()
+    """ADMIN: Confirm a payment (mark as paid) for a member in the admin's gym"""
+    # Verify payment belongs to a member in the admin's gym
+    payment = (
+        db.query(Payment)
+        .join(Member, Payment.member_id == Member.id)
+        .join(User, Member.user_id == User.id)
+        .filter(
+            Payment.id == payment_id,
+            User.gym_id == admin.gym_id
+        )
+    ).first()
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
     

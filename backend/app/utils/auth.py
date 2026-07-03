@@ -1,5 +1,5 @@
 # backend/app/utils/auth.py
-
+import os
 from datetime import datetime, timedelta
 from typing import Optional, List
 from jose import JWTError, jwt
@@ -11,7 +11,7 @@ from ..database import get_db
 from ..models.models import User
 
 # Configuration
-SECRET_KEY = "your-super-secret-key-change-this-in-production"
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-fallback-change-me")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
 
@@ -76,6 +76,11 @@ async def require_admin(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required"
         )
+    return current_user
+
+def require_super_admin(current_user: User = Depends(get_current_user)):
+    if current_user.role != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin access required")
     return current_user
 
 def require_role(allowed_roles: List[str]):

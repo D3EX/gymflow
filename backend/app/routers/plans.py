@@ -12,20 +12,20 @@ router = APIRouter(prefix="/api/plans", tags=["Plans"])
 @router.get("/", response_model=List[PlanOut])
 def get_plans(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)  # ✅ Allow authenticated users
+    current_user: User = Depends(get_current_user)
 ):
-    """Get all plans - accessible by authenticated users"""
-    plans = db.query(Plan).order_by(Plan.price).all()
-    print(f"📋 Returning {len(plans)} plans")  # Debug log
+    """Get all plans for the current user's gym"""
+    plans = db.query(Plan).filter(Plan.gym_id == current_user.gym_id).order_by(Plan.price).all()
     return plans
 
 @router.post("/", response_model=PlanOut)
 def create_plan(
     data: PlanCreate,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    plan = Plan(**data.dict())
+    """Create a new plan for the admin's gym"""
+    plan = Plan(**data.dict(), gym_id=admin.gym_id)
     db.add(plan)
     db.commit()
     db.refresh(plan)
@@ -36,9 +36,13 @@ def update_plan(
     plan_id: int,
     data: PlanUpdate,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    plan = db.query(Plan).filter(Plan.id == plan_id).first()
+    """Update a plan (must belong to admin's gym)"""
+    plan = db.query(Plan).filter(
+        Plan.id == plan_id,
+        Plan.gym_id == admin.gym_id
+    ).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
     
@@ -53,9 +57,13 @@ def update_plan(
 def delete_plan(
     plan_id: int,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    plan = db.query(Plan).filter(Plan.id == plan_id).first()
+    """Delete a plan (must belong to admin's gym)"""
+    plan = db.query(Plan).filter(
+        Plan.id == plan_id,
+        Plan.gym_id == admin.gym_id
+    ).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
     

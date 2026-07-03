@@ -37,7 +37,9 @@ export default function Login() {
       toast.success(`Welcome back, ${name}`)
       
       // Redirect based on role
-      if (role === 'admin') {
+      if (role === 'super_admin') {
+        navigate('/dashboard/super-admin')
+      } else if (role === 'admin') {
         navigate('/dashboard')
       } else if (role === 'coach') {
         navigate('/coach')
@@ -929,7 +931,7 @@ export default function Login() {
           .login-shell {
             flex-direction: column;
             gap: 20px;
-            justify-content: ;
+            justify-content: center;
             width: 100%;
             padding-top: calc(64px + env(safe-area-inset-top, 0px)); /* Clears the floating header so hero text is never covered */
           }

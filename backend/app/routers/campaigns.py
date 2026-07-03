@@ -10,47 +10,42 @@ from ..models.models import Campaign, Member, User, Notification, Subscription
 from ..schemas.schemas import CampaignCreate, CampaignUpdate, CampaignOut
 from ..utils.auth import require_admin, get_current_user
 
-# Main router for admin operations
 router = APIRouter(prefix="/api/campaigns", tags=["Campaigns"])
-
-# ✅ NEW: Public router for member-facing endpoints (NO AUTH)
 public_router = APIRouter(prefix="/api/campaigns/public", tags=["Campaigns (Public)"])
-
-# ============================================================
-# ADMIN ENDPOINTS (on main router)
-# ============================================================
 
 @router.get("/", response_model=List[CampaignOut])
 def get_campaigns(
     status: Optional[str] = None,
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    query = db.query(Campaign)
+    query = db.query(Campaign).filter(Campaign.gym_id == admin.gym_id)
     if status:
         query = query.filter(Campaign.status == status)
     return query.order_by(Campaign.created_at.desc()).all()
-
 
 @router.get("/{campaign_id}", response_model=CampaignOut)
 def get_campaign(
     campaign_id: int, 
     db: Session = Depends(get_db), 
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    campaign = db.query(Campaign).filter(
+        Campaign.id == campaign_id,
+        Campaign.gym_id == admin.gym_id
+    ).first()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     return campaign
-
 
 @router.post("/", response_model=CampaignOut)
 def create_campaign(
     data: CampaignCreate, 
     db: Session = Depends(get_db), 
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
     campaign = Campaign(
+        gym_id=admin.gym_id,
         title=data.title,
         type=data.type,
         content=data.content,
@@ -70,15 +65,17 @@ def create_campaign(
     db.refresh(campaign)
     return campaign
 
-
 @router.put("/{campaign_id}", response_model=CampaignOut)
 def update_campaign(
     campaign_id: int, 
     data: CampaignUpdate, 
     db: Session = Depends(get_db), 
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    campaign = db.query(Campaign).filter(
+        Campaign.id == campaign_id,
+        Campaign.gym_id == admin.gym_id
+    ).first()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
@@ -90,14 +87,16 @@ def update_campaign(
     db.refresh(campaign)
     return campaign
 
-
 @router.delete("/{campaign_id}")
 def delete_campaign(
     campaign_id: int, 
     db: Session = Depends(get_db), 
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    campaign = db.query(Campaign).filter(
+        Campaign.id == campaign_id,
+        Campaign.gym_id == admin.gym_id
+    ).first()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
@@ -105,44 +104,56 @@ def delete_campaign(
     db.commit()
     return {"message": "Campaign deleted"}
 
-
 @router.post("/{campaign_id}/send")
 def send_campaign(
     campaign_id: int, 
     db: Session = Depends(get_db), 
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    """
-    Send a campaign to all targeted members
-    Creates notifications for each member in the notification system
-    """
-    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    campaign = db.query(Campaign).filter(
+        Campaign.id == campaign_id,
+        Campaign.gym_id == admin.gym_id
+    ).first()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
     today = date.today()
+    
+    gym_members = (
+        db.query(Member)
+        .join(User, Member.user_id == User.id)
+        .filter(User.gym_id == admin.gym_id)
+    )
+    
     recipients = []
     
     if campaign.audience == "all":
-        recipients = db.query(Member).all()
+        recipients = gym_members.all()
     elif campaign.audience == "active":
-        recipients = db.query(Member).filter(Member.status == "active").all()
+        recipients = gym_members.filter(Member.status == "active").all()
     elif campaign.audience == "inactive":
-        recipients = db.query(Member).filter(Member.status != "active").all()
+        recipients = gym_members.filter(Member.status != "active").all()
     elif campaign.audience == "expiring":
         target_date = today + timedelta(days=7)
-        expiring_subs = db.query(Subscription).filter(
-            Subscription.status == "active",
-            Subscription.end_date <= target_date,
-            Subscription.end_date >= today
-        ).all()
+        expiring_subs = (
+            db.query(Subscription)
+            .join(Member, Subscription.member_id == Member.id)
+            .join(User, Member.user_id == User.id)
+            .filter(
+                User.gym_id == admin.gym_id,
+                Subscription.status == "active",
+                Subscription.end_date <= target_date,
+                Subscription.end_date >= today
+            )
+            .all()
+        )
         member_ids = [sub.member_id for sub in expiring_subs]
         if member_ids:
-            recipients = db.query(Member).filter(Member.id.in_(member_ids)).all()
+            recipients = gym_members.filter(Member.id.in_(member_ids)).all()
     elif campaign.audience == "vip":
-        recipients = db.query(Member).filter(Member.is_vip == True).all()
+        recipients = gym_members.filter(Member.is_vip == True).all()
     else:
-        recipients = db.query(Member).all()
+        recipients = gym_members.all()
     
     created_count = 0
     for member in recipients:
@@ -160,7 +171,7 @@ def send_campaign(
             db.add(notification)
             created_count += 1
         except Exception as e:
-            print(f"❌ Failed to create notification for member {member.id}: {e}")
+            print(f"Failed to create notification for member {member.id}: {e}")
     
     campaign.status = "sent"
     campaign.sent_count = created_count
@@ -178,47 +189,41 @@ def send_campaign(
         "status": "sent"
     }
 
-
-# ============================================================
-# ✅ PUBLIC ENDPOINTS - NO AUTHENTICATION REQUIRED
-# ============================================================
-
 @public_router.get("/active", response_model=List[CampaignOut])
 def get_public_active_campaigns(
+    gym_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
-    """
-    PUBLIC: Get active campaigns (sent/published)
-    No authentication required - for members to see offers
-    """
     thirty_days_ago = datetime.utcnow() - timedelta(days=30)
     
-    campaigns = db.query(Campaign).filter(
+    query = db.query(Campaign).filter(
         Campaign.status == "sent",
         Campaign.created_at >= thirty_days_ago
-    ).order_by(Campaign.created_at.desc()).all()
+    )
+    
+    if gym_id:
+        query = query.filter(Campaign.gym_id == gym_id)
+    
+    campaigns = query.order_by(Campaign.created_at.desc()).all()
     
     return campaigns
-
-
-# ============================================================
-# GET CAMPAIGN STATS (for admin dashboard)
-# ============================================================
 
 @router.get("/stats/summary")
 def get_campaign_stats(
     db: Session = Depends(get_db),
-    admin=Depends(require_admin)
+    admin: User = Depends(require_admin)
 ):
-    total = db.query(Campaign).count()
-    sent = db.query(Campaign).filter(Campaign.status == "sent").count()
-    scheduled = db.query(Campaign).filter(Campaign.status == "scheduled").count()
-    draft = db.query(Campaign).filter(Campaign.status == "draft").count()
+    base = db.query(Campaign).filter(Campaign.gym_id == admin.gym_id)
     
-    total_reach = db.query(Campaign.sent_count).filter(Campaign.status == "sent").all()
+    total = base.count()
+    sent = base.filter(Campaign.status == "sent").count()
+    scheduled = base.filter(Campaign.status == "scheduled").count()
+    draft = base.filter(Campaign.status == "draft").count()
+    
+    total_reach = base.filter(Campaign.status == "sent").with_entities(Campaign.sent_count).all()
     total_reach_sum = sum([r[0] for r in total_reach if r[0]]) if total_reach else 0
     
-    avg_open = db.query(Campaign.opened_count).filter(Campaign.status == "sent").all()
+    avg_open = base.filter(Campaign.status == "sent").with_entities(Campaign.opened_count).all()
     avg_open_rate = sum([r[0] for r in avg_open if r[0]]) / len(avg_open) if avg_open else 0
     
     return {
@@ -230,14 +235,16 @@ def get_campaign_stats(
         "avg_open_rate": round(avg_open_rate, 1)
     }
 
-
 @router.post("/{campaign_id}/track-open")
 def track_campaign_open(
     campaign_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    campaign = db.query(Campaign).filter(
+        Campaign.id == campaign_id,
+        Campaign.gym_id == current_user.gym_id
+    ).first()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
@@ -246,14 +253,16 @@ def track_campaign_open(
     
     return {"message": "Tracked"}
 
-
 @router.post("/{campaign_id}/track-click")
 def track_campaign_click(
     campaign_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    campaign = db.query(Campaign).filter(
+        Campaign.id == campaign_id,
+        Campaign.gym_id == current_user.gym_id
+    ).first()
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
