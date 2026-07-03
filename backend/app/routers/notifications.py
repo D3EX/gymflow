@@ -918,11 +918,11 @@ def notify_subscription_created(db: Session, member_id: int, plan_name: str, end
 # ADMIN ALERT HELPERS
 # ============================================================
 
-def get_admin_member_ids(db: Session) -> List[int]:
+def get_admin_member_ids(db: Session, gym_id: int) -> List[int]:
     """
-    Helper: Find the member_id(s) belonging to admin users in the same gym
+    Helper: Find the member_id(s) belonging to admin users in the given gym
     """
-    admin_users = db.query(User).filter(User.role == "admin").all()
+    admin_users = db.query(User).filter(User.role == "admin", User.gym_id == gym_id).all()
     admin_user_ids = [u.id for u in admin_users]
 
     if not admin_user_ids:
@@ -935,25 +935,24 @@ def get_admin_member_ids(db: Session) -> List[int]:
     return [m.id for m in admin_members]
 
 
-def notify_admins(db: Session, title: str, message: str, notification_type: str = "info"):
+def notify_admins(db: Session, title: str, message: str, gym_id: int, notification_type: str = "info"):
     """
-    Send notification to all admin users in the same gym.
+    Send notification to admin users in the given gym only.
+    `gym_id` is required — callers must always know which gym the
+    triggering event belongs to (the member/payment/subscription's
+    owning gym), so there's no "system-wide" fallback here.
     """
-    # We don't have a gym_id here because this is called from helper functions
-    # that don't have access to the current admin's gym. This function is kept
-    # as-is since it's used for system-wide alerts across all gyms.
-    
-    # Get all admin users
-    admin_users = db.query(User).filter(User.role == "admin").all()
+    admin_users = db.query(User).filter(User.role == "admin", User.gym_id == gym_id).all()
     
     print(f"\nNOTIFY_ADMINS CALLED")
     print(f"  Title: {title}")
     print(f"  Message: {message[:50]}...")
     print(f"  Type: {notification_type}")
+    print(f"  Gym: {gym_id}")
     print(f"  Admin users found: {len(admin_users)}")
     
     if not admin_users:
-        print("No admin users found to notify")
+        print(f"No admin users found for gym {gym_id}")
         return []
     
     created = []
@@ -976,8 +975,8 @@ def notify_admins(db: Session, title: str, message: str, notification_type: str 
     return created
 
 
-def notify_admins_new_signup(db: Session, member_name: str, plan_name: str = None, pending_approval: bool = False):
-    """Alert admins when a new member signs up."""
+def notify_admins_new_signup(db: Session, member_name: str, gym_id: int, plan_name: str = None, pending_approval: bool = False):
+    """Alert admins of the given gym when a new member signs up there."""
     plan_part = f" ({plan_name})" if plan_name else ""
     
     if pending_approval:
@@ -985,6 +984,7 @@ def notify_admins_new_signup(db: Session, member_name: str, plan_name: str = Non
             db,
             title="New Signup - Approval Needed",
             message=f"{member_name} just registered{plan_part} and is awaiting your approval.",
+            gym_id=gym_id,
             notification_type="warning"
         )
     else:
@@ -992,17 +992,19 @@ def notify_admins_new_signup(db: Session, member_name: str, plan_name: str = Non
             db,
             title="New Member Signup",
             message=f"{member_name} just joined the gym{plan_part}.",
+            gym_id=gym_id,
             notification_type="success"
         )
 
 
-def notify_admins_payment_issue(db: Session, member_name: str, amount: float, status: str):
-    """Helper: Alert admins when a payment fails or becomes overdue"""
+def notify_admins_payment_issue(db: Session, member_name: str, amount: float, status: str, gym_id: int):
+    """Helper: Alert admins of the given gym when a payment fails or becomes overdue"""
     status_label = "failed" if status == "failed" else "is overdue"
     return notify_admins(
         db,
         title="Payment Issue",
         message=f"{member_name}'s payment of {amount:,.0f} DZD {status_label}.",
+        gym_id=gym_id,
         notification_type="warning"
     )
 
@@ -1013,9 +1015,10 @@ def notify_admins_subscription_expiring(
     plan_name: str,
     end_date,
     days_left: int,
+    gym_id: int,
 ):
     """
-    Helper: Alert admins about an upcoming subscription expiry.
+    Helper: Alert admins of the given gym about an upcoming subscription expiry.
     """
     labels = {3: "in 3 days", 2: "in 2 days", 1: "tomorrow", 0: "TODAY"}
     label = labels.get(days_left, f"in {days_left} days")
@@ -1037,7 +1040,7 @@ def notify_admins_subscription_expiring(
         )
         notif_type = "warning"
 
-    return notify_admins(db, title=title, message=message, notification_type=notif_type)
+    return notify_admins(db, title=title, message=message, gym_id=gym_id, notification_type=notif_type)
 
 
 # ============================================================

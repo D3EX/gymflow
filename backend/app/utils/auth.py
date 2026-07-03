@@ -71,7 +71,7 @@ async def require_admin(
 ) -> User:
     """Check if the current user is an admin"""
     print(f"require_admin called for user id={current_user.id} role={current_user.role}")
-    if current_user.role not in ["admin", "manager"]:
+    if current_user.role not in ["admin", "super_admin"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required"

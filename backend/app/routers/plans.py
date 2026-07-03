@@ -38,21 +38,25 @@ def update_plan(
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin)
 ):
-    """Update a plan (must belong to admin's gym)"""
+    print("🔥 RAW INCOMING DATA:", data.dict())          # ADD THIS
+
     plan = db.query(Plan).filter(
         Plan.id == plan_id,
         Plan.gym_id == admin.gym_id
     ).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
-    
+
     for key, value in data.dict(exclude_unset=True).items():
         setattr(plan, key, value)
-    
+
+    print("🔥 PLAN FEATURES BEFORE COMMIT:", plan.features)   # ADD THIS
+
     db.commit()
     db.refresh(plan)
-    return plan
 
+    print("🔥 PLAN FEATURES AFTER REFRESH:", plan.features)   # ADD THIS
+    return plan
 @router.delete("/{plan_id}")
 def delete_plan(
     plan_id: int,

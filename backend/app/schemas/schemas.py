@@ -120,19 +120,24 @@ class PlanCreate(BaseModel):
     price: float
     duration_days: int
     description: Optional[str] = None
+    features: Optional[List[str]] = []
 
 class PlanUpdate(BaseModel):
     name: Optional[str] = None
     price: Optional[float] = None
     duration_days: Optional[int] = None
     description: Optional[str] = None
+    features: Optional[List[str]] = None
 
 class PlanOut(BaseModel):
     id: int
     name: str
     price: float
     duration_days: int
-    description: Optional[str]
+    description: Optional[str] = None
+    features: List[str] = []  # <--- ADD THIS
+    is_active: bool = True
+    created_at: datetime
 
     class Config:
         from_attributes = True

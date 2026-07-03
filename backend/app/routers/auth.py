@@ -149,6 +149,7 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
             result = notify_admins_new_signup(
                 db, 
                 member_name=user.name, 
+                gym_id=user.gym_id,
                 pending_approval=True
             )
             print(f"Notification sent! {len(result)} notifications created")

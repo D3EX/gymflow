@@ -1,21 +1,34 @@
 // frontend/src/pages/auth/Register.jsx
 
-import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import api from '../../api/client'
 import toast from 'react-hot-toast'
 import {
-  Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft, Check, User, Phone, Ruler, Weight
+  Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft, Check, User, Phone, Ruler, Weight, Building2
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 
 export default function Register() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { setAuth } = useAuthStore()
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [step, setStep] = useState(1)
+
+  // ── Gym resolution ──────────────────────────────────────────
+  // Primary path: /register?gym=12 from a QR code / link the gym shares.
+  // Fallback: no valid param -> member picks their gym from a list
+  // before step 1. `step` becomes 0 (pick gym), 1 (account), 2 (profile).
+  const gymParam = searchParams.get('gym')
+  const [gymId, setGymId] = useState(gymParam ? parseInt(gymParam) : null)
+  const [gymName, setGymName] = useState('')
+  const [gymResolving, setGymResolving] = useState(true)
+  const [gymOptions, setGymOptions] = useState([])
+  const [gymSearch, setGymSearch] = useState('')
+
+  const [step, setStep] = useState(null) // null = still resolving gym; set once we know
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -28,6 +41,71 @@ export default function Register() {
     gender: 'male'
   })
   const [errors, setErrors] = useState({})
+
+  // Resolve the gym: validate the ?gym= param against the backend, or
+  // load the public gym list so the member can pick one manually.
+  useEffect(() => {
+    let cancelled = false
+
+    const resolveGym = async () => {
+      if (gymParam) {
+        try {
+          const res = await api.get(`/gyms/${gymParam}`)
+          if (!cancelled) {
+            setGymId(res.data.id)
+            setGymName(res.data.name)
+            setGymResolving(false)
+            setStep(1)
+          }
+          return
+        } catch {
+          // Bad/stale QR code or link — fall through to manual picker.
+          toast.error('That gym link looks invalid — please pick your gym below')
+        }
+      }
+
+      // No param, or the param didn't resolve: load the picker list.
+      try {
+        const res = await api.get('/gyms')
+        if (!cancelled) {
+          setGymOptions(res.data)
+          setGymId(null)
+          setStep(0)
+        }
+      } catch {
+        if (!cancelled) toast.error('Could not load gyms — please try again')
+      } finally {
+        if (!cancelled) setGymResolving(false)
+      }
+    }
+
+    resolveGym()
+    return () => { cancelled = true }
+  }, [gymParam])
+
+  const selectGym = (gym) => {
+    setGymId(gym.id)
+    setGymName(gym.name)
+    setStep(1)
+  }
+
+  const goToGymPicker = async () => {
+    // If we arrived via ?gym= and never loaded the full list, fetch it now.
+    if (gymOptions.length === 0) {
+      try {
+        const res = await api.get('/gyms')
+        setGymOptions(res.data)
+      } catch {
+        toast.error('Could not load gyms — please try again')
+        return
+      }
+    }
+    setStep(0)
+  }
+
+  const filteredGymOptions = gymOptions.filter(g =>
+    g.name.toLowerCase().includes(gymSearch.toLowerCase())
+  )
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -86,6 +164,11 @@ export default function Register() {
       toast.error('Please fix the errors before submitting')
       return
     }
+    if (!gymId) {
+      toast.error('Please select your gym before continuing')
+      setStep(0)
+      return
+    }
 
     setLoading(true)
     try {
@@ -98,7 +181,8 @@ export default function Register() {
         weight: formData.weight ? parseFloat(formData.weight) : null,
         height: formData.height ? parseFloat(formData.height) : null,
         gender: formData.gender,
-        role: 'client'
+        role: 'client',
+        gym_id: gymId
       }
 
       // Register the user
@@ -1378,13 +1462,47 @@ mask-image: linear-gradient(
               lineHeight: 1.5,
               letterSpacing: '0.02em',
             }}>
-              {step === 1 ? 'Create your account' : 'Tell us about yourself'}
+              {step === null ? 'One moment…' : step === 0 ? 'Which gym are you joining?' : step === 1 ? 'Create your account' : 'Tell us about yourself'}
             </p>
           </div>
+
+          {/* Gym confirmation banner — clickable so they can pick a different gym */}
+          {step > 0 && gymName && (
+            <button
+              type="button"
+              onClick={goToGymPicker}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '8px 14px', marginBottom: '14px',
+                borderRadius: '999px', width: '100%',
+                background: 'rgba(197,106,42,0.08)',
+                border: '1px solid rgba(197,106,42,0.20)',
+                cursor: 'pointer',
+                transition: 'background 0.2s ease, border-color 0.2s ease',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(197,106,42,0.14)'; e.currentTarget.style.borderColor = 'rgba(197,106,42,0.32)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(197,106,42,0.08)'; e.currentTarget.style.borderColor = 'rgba(197,106,42,0.20)' }}
+            >
+              <Building2 size={13} color="#C56A2A" style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.65)', flex: 1, textAlign: 'left' }}>
+                Joining <span style={{ color: '#E8844A' }}>{gymName}</span>
+              </span>
+              <span style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.03em' }}>
+                Change
+              </span>
+            </button>
+          )}
 
           {/* Step indicator */}
           <div style={{ marginBottom: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <span style={{
+                fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                color: step === 0 ? '#C56A2A' : 'rgba(255,255,255,0.25)',
+              }}>
+                Gym
+              </span>
               <span style={{
                 fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em',
                 textTransform: 'uppercase',
@@ -1403,7 +1521,7 @@ mask-image: linear-gradient(
             <div style={{ height: '3px', borderRadius: '999px', background: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
               <div style={{
                 height: '100%',
-                width: step === 1 ? '50%' : '100%',
+                width: step === null ? '0%' : step === 0 ? '8%' : step === 1 ? '54%' : '100%',
                 background: 'linear-gradient(90deg, #C56A2A, #E8844A)',
                 borderRadius: '999px',
                 transition: 'width 0.4s cubic-bezier(0.16,1,0.3,1)',
@@ -1411,6 +1529,64 @@ mask-image: linear-gradient(
             </div>
           </div>
 
+          {step === null ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 0', gap: '12px' }}>
+              <div style={{
+                width: '28px', height: '28px', borderRadius: '50%',
+                border: '2.5px solid rgba(255,255,255,0.12)', borderTopColor: '#C56A2A',
+                animation: 'spin 0.8s linear infinite'
+              }} />
+              <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)' }}>Loading…</span>
+            </div>
+          ) : step === 0 ? (
+            <div className="fade-in">
+              {/* ── Step 0: Pick gym (fallback when no ?gym= link/QR was used) ── */}
+              <div className="input-group">
+                <input
+                  type="text"
+                  className="form-input"
+                  style={{ paddingTop: '16px' }}
+                  placeholder="Search for your gym…"
+                  value={gymSearch}
+                  onChange={(e) => setGymSearch(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div style={{ maxHeight: '260px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {gymResolving ? (
+                  <div style={{ textAlign: 'center', padding: '24px', color: 'rgba(255,255,255,0.35)', fontSize: '12px' }}>
+                    Loading gyms…
+                  </div>
+                ) : filteredGymOptions.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '24px', color: 'rgba(255,255,255,0.35)', fontSize: '12px' }}>
+                    No gyms match "{gymSearch}"
+                  </div>
+                ) : (
+                  filteredGymOptions.map((gym) => (
+                    <button
+                      key={gym.id}
+                      type="button"
+                      onClick={() => selectGym(gym)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        padding: '12px 14px', borderRadius: '14px',
+                        background: 'rgba(255,255,255,0.04)',
+                        border: '1px solid rgba(255,255,255,0.06)',
+                        color: '#f5f5f7', fontSize: '13px', fontWeight: 500,
+                        textAlign: 'left', cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(197,106,42,0.35)'; e.currentTarget.style.background = 'rgba(140,67,19,0.08)' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+                    >
+                      <Building2 size={15} color="#C56A2A" />
+                      {gym.name}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : (
           <form onSubmit={handleSubmit}>
             <div className="fade-in">
               {step === 1 ? (
@@ -1632,6 +1808,7 @@ mask-image: linear-gradient(
               )}
             </div>
           </form>
+          )}
 
           {/* Divider */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '14px 0 12px' }}>

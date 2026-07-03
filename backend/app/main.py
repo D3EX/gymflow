@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import (
     auth, members, attendance, nutrition, programs, payments, 
     schedule, subscriptions, dashboard, staff, equipment, 
-    notifications, campaigns, plans, coach, personal_sessions, messages ,super_admin
+    notifications, campaigns, plans, coach, personal_sessions, messages ,super_admin,gyms
 )
 from app.database import engine, Base, init_db, get_db
 from app.utils.subscription_expiry_checker import start_expiry_scheduler
@@ -71,6 +71,7 @@ app.include_router(messages.router)
 # Include the public router for campaigns
 app.include_router(campaigns.public_router)
 app.include_router(super_admin.router)
+app.include_router(gyms.router)
 
 @app.get("/")
 def root():

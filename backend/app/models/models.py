@@ -65,17 +65,19 @@ class Plan(Base):
     __tablename__ = "plans"
     
     id = Column(Integer, primary_key=True, index=True)
-    gym_id = Column(Integer, ForeignKey("gyms.id"), nullable=False)  # NEW
+    gym_id = Column(Integer, ForeignKey("gyms.id"), nullable=False)
     name = Column(String, nullable=False)
     price = Column(Float, nullable=False)
     duration_days = Column(Integer, nullable=False)
     description = Column(Text, nullable=True)
+    features = Column(JSON, default=[])  # <--- ADD THIS
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
     subscriptions = relationship("Subscription", back_populates="plan")
-    gym = relationship("Gym")  # NEW
+    gym = relationship("Gym")
+
 class Subscription(Base):
     __tablename__ = "subscriptions"
     
