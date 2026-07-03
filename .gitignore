@@ -16,3 +16,8 @@ frontend/dist/
 # Editors/OS
 .vscode/
 .DS_Store
+
+*.db
+*.db.backup
+backend/*.db
+backend/*.db.backup
