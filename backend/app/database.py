@@ -29,26 +29,55 @@ def get_db():
 
 def init_db():
     """Initialize database with default data"""
-    from app.models.models import User, Plan, Class
+    from app.models.models import User, Plan, Class, Gym
     from app.utils.auth import get_password_hash
     from datetime import datetime
-    
+
     db = SessionLocal()
     try:
-        # Create admin user if not exists
-        admin = db.query(User).filter(User.email == "admin@gymflow.com").first()
-        if not admin:
-            admin = User(
+        # Create a default gym owned by a regular gym admin (not the super admin)
+        default_gym = db.query(Gym).first()
+        if not default_gym:
+            default_gym = Gym(
+                name="Demo Gym",
+                owner_email="admin@gymflow.com",
+                is_active=True
+            )
+            db.add(default_gym)
+            db.commit()
+            db.refresh(default_gym)
+            print(f"Default gym created: {default_gym.name} (id={default_gym.id})")
+
+        # Create super admin (platform owner, not tied to any single gym)
+        super_admin = db.query(User).filter(User.email == "super@gymflow.com").first()
+        if not super_admin:
+            super_admin = User(
+                name="Super Admin",
+                email="super@gymflow.com",
+                password=get_password_hash("super123"),
+                role="super_admin",
+                gym_id=None,
+                is_active=True
+            )
+            db.add(super_admin)
+            db.commit()
+            print("Super admin user created: super@gymflow.com / super123")
+
+        # Create the demo gym's own admin (owner) account
+        gym_admin = db.query(User).filter(User.email == "admin@gymflow.com").first()
+        if not gym_admin:
+            gym_admin = User(
                 name="Admin",
                 email="admin@gymflow.com",
                 password=get_password_hash("admin123"),
                 role="admin",
+                gym_id=default_gym.id,
                 is_active=True
             )
-            db.add(admin)
+            db.add(gym_admin)
             db.commit()
-            print("✅ Admin user created: admin@gymflow.com / admin123")
-        
+            print("Gym admin user created: admin@gymflow.com / admin123")
+
         # Create default plans if not exists
         default_plans = [
             {"name": "Monthly Basic", "price": 3500, "duration_days": 30, "description": "Basic gym access"},
@@ -57,16 +86,16 @@ def init_db():
             {"name": "Yearly", "price": 48000, "duration_days": 365, "description": "Full year access"},
         ]
         for p in default_plans:
-            plan = db.query(Plan).filter(Plan.name == p["name"]).first()
+            plan = db.query(Plan).filter(Plan.name == p["name"], Plan.gym_id == default_gym.id).first()
             if not plan:
-                plan = Plan(**p, is_active=True)
+                plan = Plan(**p, gym_id=default_gym.id, is_active=True)
                 db.add(plan)
         db.commit()
-        print("✅ Default plans created")
-        
+        print("Default plans created")
+
         # Create sample classes if not exists
         sample_classes = [
-            {"name": "HIIT Power", "coach": "John Coach", "time": "06:00 AM", "end_time": "07:00 AM", 
+            {"name": "HIIT Power", "coach": "John Coach", "time": "06:00 AM", "end_time": "07:00 AM",
              "day_of_week": "Monday", "max_capacity": 20, "location": "Studio A", "type": "cardio"},
             {"name": "Yoga Flow", "coach": "Sarah Trainer", "time": "08:00 AM", "end_time": "09:00 AM",
              "day_of_week": "Monday", "max_capacity": 15, "location": "Studio B", "type": "yoga"},
@@ -88,15 +117,16 @@ def init_db():
         for c in sample_classes:
             existing = db.query(Class).filter(
                 Class.name == c["name"],
-                Class.day_of_week == c["day_of_week"]
+                Class.day_of_week == c["day_of_week"],
+                Class.gym_id == default_gym.id
             ).first()
             if not existing:
-                cls = Class(**c, is_active=True)
+                cls = Class(**c, gym_id=default_gym.id, is_active=True)
                 db.add(cls)
         db.commit()
-        print("✅ Sample classes created")
-        
+        print("Sample classes created")
+
     except Exception as e:
-        print(f"⚠️ Error initializing database: {e}")
+        print(f"Error initializing database: {e}")
     finally:
         db.close()

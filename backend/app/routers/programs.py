@@ -158,7 +158,30 @@ def update_coach_program(
         program.coach_name = data.coach_name
     if data.is_active is not None:
         program.is_active = data.is_active
-    
+
+    # client_id can legitimately be sent as null (to unassign the program),
+    # so we check whether the field was included in the request at all,
+    # rather than just checking truthiness — otherwise "unassign" (null)
+    # and "field not sent" are indistinguishable and unassign silently does nothing.
+    payload = data.dict(exclude_unset=True)
+    if "client_id" in payload:
+        new_client_id = payload["client_id"]
+        if new_client_id:
+            client_member = db.query(Member).filter(Member.id == new_client_id).first()
+            if not client_member:
+                raise HTTPException(status_code=404, detail="Client not found")
+            if current_user.role == "coach":
+                coach_client = db.query(CoachClient).filter(
+                    CoachClient.coach_id == current_user.id,
+                    CoachClient.client_id == new_client_id,
+                    CoachClient.is_active == True
+                ).first()
+                if not coach_client:
+                    raise HTTPException(status_code=403, detail="This client is not assigned to you")
+            program.member_id = new_client_id
+        else:
+            program.member_id = None
+
     db.commit()
     db.refresh(program)
     return program

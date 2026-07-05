@@ -6,7 +6,8 @@ import toast from 'react-hot-toast'
 import {
   Calendar, Plus, AlertCircle, Users, DollarSign,
   Clock, CheckCircle, XCircle, Search, Download,
-  Edit, Ban, RefreshCw, X, Save, Trash2, Calendar as CalendarIcon
+  Edit, Ban, RefreshCw, X, Save, Trash2, Calendar as CalendarIcon,
+  AlertTriangle
 } from 'lucide-react'
 import { COLORS, ThemeStyles } from '../../theme/GymTheme'
 
@@ -46,7 +47,7 @@ function exportToExcel(subscriptions) {
       <![endif]-->
       <style>
         table { border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; }
-        th { background: #fb7121; color: #ffffff; font-weight: 700; padding: 8px 12px; border: 1px solid #ddd; text-align: left; }
+        th { background: #C56A2A; color: #ffffff; font-weight: 700; padding: 8px 12px; border: 1px solid #ddd; text-align: left; }
         td { padding: 6px 12px; border: 1px solid #ddd; }
         tr:nth-child(even) { background: #f9f9f9; }
         .status-active { color: #22c55e; font-weight: 600; }
@@ -210,77 +211,116 @@ function DeleteConfirmModal({ isOpen, onClose, onConfirm, memberName, isDeleting
   if (!isOpen) return null
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={isDeleting ? undefined : onClose}>
       <div className="modal" style={{ width: '100%', maxWidth: 400 }} onClick={e => e.stopPropagation()}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 20,
-          paddingBottom: 16,
-          borderBottom: `1px solid ${C.line}`
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{
-              width: 34, height: 34, borderRadius: 9,
-              background: `${C.red}18`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center'
-            }}>
-              <Trash2 size={16} color={C.red} />
-            </div>
-            <h2 className="modal-title" style={{ fontSize: 16 }}>Delete Subscription</h2>
-          </div>
-          <button onClick={onClose} className="modal-close">×</button>
-        </div>
-
-        <p style={{ fontSize: 14, color: C.text, marginBottom: 8 }}>
-          Are you sure you want to delete the subscription for <strong>{memberName}</strong>?
-        </p>
-        <p style={{ fontSize: 12, color: C.text3, marginBottom: 20 }}>
-          This action cannot be undone.
-        </p>
-
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button
-            onClick={onConfirm}
-            className="btn"
+        <div
+          style={{
+            padding: '12px 8px 4px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+          }}
+        >
+          <div
             style={{
-              flex: 1,
-              justifyContent: 'center',
-              background: C.red,
-              color: '#fff',
-              padding: '10px 20px',
-              borderRadius: 8,
-              border: 'none',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: isDeleting ? 'default' : 'pointer',
-              opacity: isDeleting ? 0.6 : 1,
+              width: '72px',
+              height: '72px',
+              borderRadius: '50%',
+              background: 'rgba(251, 113, 33, 0.10)',
+              border: '1px solid rgba(251, 113, 33, 0.25)',
               display: 'flex',
               alignItems: 'center',
-              gap: 8
+              justifyContent: 'center',
+              marginBottom: '22px',
             }}
-            disabled={isDeleting}
           >
-            {isDeleting ? (
-              <>
-                <div className="spinner" style={{ width: 16, height: 16 }} />
-                Deleting...
-              </>
-            ) : (
-              <>
-                <Trash2 size={14} />
-                Delete
-              </>
-            )}
-          </button>
-          <button
-            onClick={onClose}
-            className="btn btn-ghost"
-            style={{ flex: 1, justifyContent: 'center' }}
+            <AlertTriangle size={30} color="#C56A2A" strokeWidth={2} />
+          </div>
+
+          <h3
+            style={{
+              fontSize: '18px',
+              fontWeight: 700,
+              color: C.text,
+              margin: '0 0 10px',
+            }}
           >
-            Cancel
-          </button>
+            Delete Subscription
+          </h3>
+
+          <p
+            style={{
+              fontSize: '14px',
+              color: C.text3,
+              lineHeight: 1.6,
+              maxWidth: '320px',
+              margin: '0 auto 28px',
+            }}
+          >
+            Are you sure you want to delete the subscription for{' '}
+            <span style={{ color: C.text, fontWeight: 600 }}>{memberName}</span>?
+            This action cannot be undone.
+          </p>
+
+          <div
+            style={{
+              width: '100%',
+              borderTop: `1px solid ${C.line}`,
+              paddingTop: '20px',
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '12px',
+            }}
+          >
+            <button
+              onClick={onClose}
+              className="btn btn-ghost"
+              style={{ flex: '0 1 140px', fontWeight: 500 }}
+              disabled={isDeleting}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              className="btn"
+              style={{
+                flex: '0 1 140px',
+                justifyContent: 'center',
+                background: '#C56A2A',
+                color: '#fff',
+                border: 'none',
+                fontWeight: 600,
+                boxShadow: '0 2px 10px rgba(251, 113, 33, 0.35)',
+                transition: 'background 0.15s, box-shadow 0.15s',
+                cursor: isDeleting ? 'default' : 'pointer',
+                opacity: isDeleting ? 0.7 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+              disabled={isDeleting}
+              onMouseEnter={e => {
+                if (!isDeleting) {
+                  e.currentTarget.style.background = '#e5620f'
+                  e.currentTarget.style.boxShadow = '0 2px 14px rgba(251, 113, 33, 0.45)'
+                }
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = '#C56A2A'
+                e.currentTarget.style.boxShadow = '0 2px 10px rgba(251, 113, 33, 0.35)'
+              }}
+            >
+              {isDeleting ? (
+                <>
+                  <div className="spinner" style={{ width: 16, height: 16 }} />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

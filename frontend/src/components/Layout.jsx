@@ -1284,6 +1284,7 @@ export default function Layout() {
     {
       title: 'TRAINING',
       items: [
+        { path: '/member/coaches', label: 'Coaches', icon: UserCircle },
         { path: '/member/program', label: 'My Program', icon: Activity },
         { path: '/member/schedule', label: 'Class Schedule', icon: Calendar },
         { path: '/member/personal-sessions', label: 'Personal Sessions', icon: User },
@@ -1334,6 +1335,7 @@ export default function Layout() {
     '/member': 'Dashboard',
     '/member/checkin': 'Check In',
     '/member/membership': 'My Membership',
+    '/member/coaches': 'Coaches',
     '/member/program': 'My Program',
     '/member/schedule': 'Class Schedule',
     '/member/personal-sessions': 'Personal Sessions',

@@ -46,25 +46,31 @@ function Spinner() {
 }
 
 // ─── RESPONSIVE SPARKLINE ───────────────────────────────────────
-function Sparkline({ data = [], color = O, height = 40 }) {
+function Sparkline({ data = [], color = O, height = 40, fill = false }) {
   const ref = useRef(null)
   const [w, setW] = useState(200)
+  const [h, setH] = useState(height)
   useEffect(() => {
     if (!ref.current) return
-    const ro = new ResizeObserver(e => setW(e[0].contentRect.width || 200))
+    const ro = new ResizeObserver(e => {
+      setW(e[0].contentRect.width || 200)
+      if (fill) setH(e[0].contentRect.height || height)
+    })
     ro.observe(ref.current)
     return () => ro.disconnect()
-  }, [])
-  if (!data || data.length < 2) return <div ref={ref} style={{ height }} />
-  const min = Math.min(...data), max = Math.max(...data), rng = max - min || 1
-  const toX = i => (i / (data.length - 1)) * w
-  const toY = v => height - ((v - min) / rng) * height * 0.8 - height * 0.1
-  const pts = data.map((v, i) => ({ x: toX(i), y: toY(v) }))
+  }, [fill])
+  const chartH = fill ? h : height
+  const isEmpty = !data || data.length < 2
+  const safeData = isEmpty ? [0, 0] : data
+  const min = Math.min(...safeData), max = Math.max(...safeData), rng = max - min || 1
+  const toX = i => (i / (safeData.length - 1)) * w
+  const toY = v => chartH - ((v - min) / rng) * chartH * 0.8 - chartH * 0.1
+  const pts = safeData.map((v, i) => ({ x: toX(i), y: toY(v) }))
   const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
-  const area = `${line} L${pts[pts.length-1].x},${height} L0,${height} Z`
+  const area = `${line} L${pts[pts.length-1].x},${chartH} L0,${chartH} Z`
   return (
-    <div ref={ref} style={{ width: '100%' }}>
-      <svg width="100%" height={height} viewBox={`0 0 ${w} ${height}`} style={{ display: 'block', overflow: 'visible' }}>
+    <div ref={ref} style={{ width: '100%', height: fill ? '100%' : 'auto' }}>
+      <svg width="100%" height={fill ? '100%' : chartH} viewBox={`0 0 ${w} ${chartH}`} preserveAspectRatio="none" style={{ display: 'block', overflow: 'visible' }}>
         <defs>
           <linearGradient id={`sg-${color.replace('#','')}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity=".25"/>
@@ -72,7 +78,7 @@ function Sparkline({ data = [], color = O, height = 40 }) {
           </linearGradient>
         </defs>
         <path d={area} fill={`url(#sg-${color.replace('#','')})`}/>
-        <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
         <circle cx={pts[pts.length-1].x} cy={pts[pts.length-1].y} r="3.5" fill={color}/>
       </svg>
     </div>
@@ -369,6 +375,7 @@ export default function CoachDashboard() {
     pendingSessions: 0, completedSessions: 0, totalSessions: 0,
     totalClasses: 0,
     sparkline: [],
+    sparklineLabels: [],
   })
 
   useEffect(() => { fetchAll() }, [])
@@ -406,6 +413,20 @@ export default function CoachDashboard() {
         classesData = Array.isArray(cr.data) ? cr.data : cr.data?.data || []
       } catch (_) {}
 
+      // Real "Client Progress Trend": average body-fat % across active
+      // clients, bucketed by week. ClientProgress check-ins are logged
+      // manually (weigh-ins), not daily, so the backend only returns
+      // weeks that actually have at least one logged entry — no
+      // fabricated data points.
+      let progressTrend = []
+      try {
+        progressTrend = await api.get('/coach/progress/trend?weeks=8').then(r => r.data || [])
+      } catch (_) {}
+      const sparkline = progressTrend.map(w => w.avg_body_fat)
+      const sparklineLabels = progressTrend.map(w =>
+        new Date(w.week_start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      )
+
       const DAYS  = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
       const SHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
       const counts = Object.fromEntries(DAYS.map(d => [d, 0]))
@@ -436,7 +457,8 @@ export default function CoachDashboard() {
         completedSessions: todaySessions.filter(s => s.status === 'completed').length,
         totalSessions: todaySessions.length,
         totalClasses: classesData.filter(c => c.is_active !== false).length,
-        sparkline: Array.from({ length: 7 }, () => Math.round(45 + Math.random() * 45)),
+        sparkline,
+        sparklineLabels,
       })
     } catch (err) {
       console.error(err)
@@ -451,7 +473,7 @@ export default function CoachDashboard() {
   const {
     totalClients, activeClients, activePrograms, totalWeeks,
     totalExercises, completedExercises, pendingSessions,
-    completedSessions, totalSessions, totalClasses, sparkline,
+    completedSessions, totalSessions, totalClasses, sparkline, sparklineLabels,
   } = derived
 
   const inactiveClients = totalClients - activeClients
@@ -459,11 +481,6 @@ export default function CoachDashboard() {
   const activeRate      = totalClients > 0 ? Math.round(activeClients / totalClients * 100) : 0
   const exRate          = totalExercises > 0 ? Math.round(completedExercises / totalExercises * 100) : 0
   const maxClassCount   = Math.max(...weeklyClasses.map(d => d.count), 1)
-
-  const chartLabels = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (6 - i))
-    return d.toLocaleDateString('en-US', { weekday: 'short' })
-  })
 
   const g3    = sm ? '1fr' : md ? '1fr 1fr' : '1fr 1fr 1fr'
   const gMain = sm ? '1fr' : md ? '1fr' : '1fr 320px'
@@ -590,40 +607,62 @@ export default function CoachDashboard() {
           </div>
         </Card>
 
-        {/* B: PROGRAMS */}
+        {/* B: PROGRAMS — MATCHED TO CLIENT ROSTER LAYOUT */}
         <Card>
-          <CardHead title="Programs"
-            right={
-              <Link to="/coach/programs" style={{ fontSize: 11, color: O, textDecoration: 'none', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 2 }}>
-                View all <ChevronRight size={13}/>
-              </Link>
-            }
-          />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-            <Ring pct={exRate} size={72} color={O} label="done"/>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {[
-                { label: 'Active programs', value: activePrograms, color: O },
-                { label: 'Total weeks',     value: totalWeeks,     color: B },
-                { label: 'Exercises done',  value: `${completedExercises}/${totalExercises}`, color: 'var(--text-2)' },
-              ].map(({ label, value, color }) => (
-                <div key={label}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 600 }}>{label}</span>
-                    <span style={{ fontSize: 12, fontWeight: 800, color }}>{value}</span>
-                  </div>
+          <div style={{
+            display: 'grid',
+            gridTemplateRows: 'auto 1fr',
+            height: '100%'
+          }}>
+            {/* 1. Header */}
+            <CardHead title="Programs"
+              right={
+                <Link to="/coach/programs" style={{ fontSize: 11, color: O, textDecoration: 'none', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 2 }}>
+                  View all <ChevronRight size={13}/>
+                </Link>
+              }
+            />
+
+            {/* 2. Content stretched to bottom — identical structure to Client Roster */}
+            <div style={{
+              display: 'grid',
+              gridTemplateRows: '1fr auto',
+              gap: '4px'
+            }}>
+
+              {/* Ring + 3 Stats */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                <Ring pct={exRate} size={90} color={O} label="done"/>
+
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {[
+                    { label: 'Active programs', value: activePrograms, color: O },
+                    { label: 'Total weeks',     value: totalWeeks,     color: B },
+                    { label: 'Exercises done',  value: `${completedExercises}/${totalExercises}`, color: 'var(--text-2)' },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: 2, background: color, flexShrink: 0 }}/>
+                        <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600 }}>{label}</span>
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text)' }}>{value}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+
+              {/* Avg body-fat trend FORCED to the bottom */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-3)' }}>Avg body-fat trend</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: O }}>
+                    {sparkline.length ? Math.max(...sparkline) : 0}% peak
+                  </span>
+                </div>
+                <Sparkline data={sparkline} color={O} height={36}/>
+              </div>
+
             </div>
-          </div>
-          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-              <span style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 600 }}>Progress trend (7d)</span>
-              <span style={{ fontSize: 10, color: O, fontWeight: 700 }}>
-                {sparkline.length ? Math.max(...sparkline) : 0}% peak
-              </span>
-            </div>
-            <Sparkline data={sparkline} color={O} height={36}/>
           </div>
         </Card>
 
@@ -707,25 +746,31 @@ export default function CoachDashboard() {
           {/* Client Progress Trend */}
           <div style={{ paddingTop: 20 }}>
             <CardHead title="Client Progress Trend"
-              right={
+              right={sparkline.length > 0 ? (
                 <div style={{ display: 'flex', gap: 10 }}>
                   <span style={{ fontSize: 10, color: 'var(--text-3)' }}>
                     Avg: <strong style={{ color: 'var(--text)' }}>
-                      {sparkline.length ? Math.round(sparkline.reduce((a,b)=>a+b,0)/sparkline.length) : 0}%
+                      {Math.round((sparkline.reduce((a,b)=>a+b,0)/sparkline.length) * 10) / 10}%
                     </strong>
                   </span>
                   <span style={{ fontSize: 10, color: 'var(--text-3)' }}>
-                    Peak: <strong style={{ color: O }}>{sparkline.length ? Math.max(...sparkline) : 0}%</strong>
+                    Peak: <strong style={{ color: O }}>{Math.max(...sparkline)}%</strong>
                   </span>
                 </div>
-              }
+              ) : null}
             />
-            <Sparkline data={sparkline} color={O} height={110}/>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-              {chartLabels.map((l, i) => (
-                <span key={i} style={{ fontSize: 9, color: 'var(--text-3)', fontWeight: 600, flex: 1, textAlign: 'center' }}>{l}</span>
-              ))}
-            </div>
+            {sparkline.length >= 2 ? (
+              <>
+                <Sparkline data={sparkline} color={O} height={110}/>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                  {sparklineLabels.map((l, i) => (
+                    <span key={i} style={{ fontSize: 9, color: 'var(--text-3)', fontWeight: 600, flex: 1, textAlign: 'center' }}>{l}</span>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <Empty icon={Users} msg="No client check-ins logged yet — log a weigh-in to start the trend"/>
+            )}
           </div>
         </Card>
 

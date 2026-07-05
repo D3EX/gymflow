@@ -8,7 +8,7 @@ import {
   CalendarDays, Ban, CheckCircle2, UserCircle, Clock, 
   Calendar, Info, X, Save, Sparkles, Target, 
   TrendingUp, Shield, Zap, AlertCircle, ChevronDown,
-  Search, Check, MoreVertical
+  Search, Check, MoreVertical, AlertTriangle
 } from 'lucide-react'
 import Modal from "../../components/Modal"
 import { COLORS, ThemeStyles } from '../../theme/GymTheme'
@@ -501,6 +501,7 @@ export default function Classes() {
   const [coachesLoading, setCoachesLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingClass, setEditingClass] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [formData, setFormData] = useState(emptyForm)
   const [dayFilter, setDayFilter] = useState('all')
   const [page, setPage] = useState(1)
@@ -612,15 +613,20 @@ export default function Classes() {
     }
   }
 
-  const handleDelete = async (id, name) => {
-    if (confirm(`Delete class "${name}"? This cannot be undone.`)) {
-      try {
-        await api.delete(`/schedule/classes/${id}`)
-        toast.success('Class deleted')
-        fetchData()
-      } catch (error) {
-        toast.error('Failed to delete class')
-      }
+  const handleDelete = (id, name) => {
+    setDeleteTarget({ id, name })
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    try {
+      await api.delete(`/schedule/classes/${deleteTarget.id}`)
+      toast.success('Class deleted')
+      fetchData()
+    } catch (error) {
+      toast.error('Failed to delete class')
+    } finally {
+      setDeleteTarget(null)
     }
   }
 
@@ -1427,6 +1433,109 @@ export default function Classes() {
             }
           `}</style>
         </form>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title=""
+        size="sm"
+      >
+        <div
+          style={{
+            padding: '12px 8px 4px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+          }}
+        >
+          <div
+            style={{
+              width: '72px',
+              height: '72px',
+              borderRadius: '50%',
+              background: 'rgba(251, 113, 33, 0.10)',
+              border: '1px solid rgba(251, 113, 33, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '22px',
+            }}
+          >
+            <AlertTriangle size={30} color="#C56A2A" strokeWidth={2} />
+          </div>
+
+          <h3
+            style={{
+              fontSize: '18px',
+              fontWeight: 700,
+              color: 'var(--text)',
+              margin: '0 0 10px',
+            }}
+          >
+            Delete Class
+          </h3>
+
+          <p
+            style={{
+              fontSize: '14px',
+              color: 'var(--text-muted)',
+              lineHeight: 1.6,
+              maxWidth: '320px',
+              margin: '0 auto 28px',
+            }}
+          >
+            Are you sure you want to delete{' '}
+            <span style={{ color: 'var(--text)', fontWeight: 600 }}>
+              {deleteTarget?.name || 'this class'}
+            </span>
+            ? This cannot be undone.
+          </p>
+
+          <div
+            style={{
+              width: '100%',
+              borderTop: '1px solid var(--border)',
+              paddingTop: '20px',
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '12px',
+            }}
+          >
+            <button
+              onClick={() => setDeleteTarget(null)}
+              className="btn btn-secondary"
+              style={{ flex: '0 1 140px', fontWeight: 500 }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmDelete}
+              className="btn"
+              style={{
+                flex: '0 1 140px',
+                background: '#C56A2A',
+                color: '#fff',
+                border: 'none',
+                fontWeight: 600,
+                boxShadow: '0 2px 10px rgba(251, 113, 33, 0.35)',
+                transition: 'background 0.15s, box-shadow 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = '#e5620f'
+                e.currentTarget.style.boxShadow = '0 2px 14px rgba(251, 113, 33, 0.45)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = '#C56A2A'
+                e.currentTarget.style.boxShadow = '0 2px 10px rgba(251, 113, 33, 0.35)'
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

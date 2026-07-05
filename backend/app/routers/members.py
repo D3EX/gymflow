@@ -300,7 +300,7 @@ def create_member(data: MemberCreate, db: Session = Depends(get_db), admin: User
     db.commit()
     db.refresh(member)
 
-    notify_admins_new_signup(db, member_name=user.name)
+    notify_admins_new_signup(db, member_name=user.name, gym_id=admin.gym_id)
 
     return {
         "id": member.id,

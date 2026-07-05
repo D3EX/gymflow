@@ -43,6 +43,7 @@ import MemberSchedule from './pages/member/Schedule'
 import MemberNutrition from './pages/member/Nutrition'
 import MemberOffers from './pages/member/Offers'
 import MemberPersonalSessions from './pages/member/PersonalSessions'
+import MemberCoaches from './pages/member/Coaches'
 
 // Coach Pages
 import CoachDashboard from './pages/coach/Dashboard'
@@ -138,6 +139,7 @@ function App() {
               <Route path="nutrition" element={<MemberNutrition />} />
               <Route path="offers" element={<MemberOffers />} />
               <Route path="personal-sessions" element={<MemberPersonalSessions />} />
+              <Route path="coaches" element={<MemberCoaches />} />
             </Route>
           </Route>
 

@@ -1,6 +1,7 @@
 // frontend/src/pages/member/PersonalSessions.jsx
 
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { 
   Calendar, Clock, User, CheckCircle, XCircle, Plus, 
   AlertCircle, Loader2, ChevronRight, Star, Search, 
@@ -12,10 +13,10 @@ import api from '../../api/client'
 import toast from 'react-hot-toast'
 
 export default function MemberPersonalSessions() {
+  const navigate = useNavigate()
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
   const [showBooking, setShowBooking] = useState(false)
-  const [showFindCoach, setShowFindCoach] = useState(false)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [confirmAction, setConfirmAction] = useState(null)
   const [confirmData, setConfirmData] = useState(null)
@@ -1327,7 +1328,7 @@ export default function MemberPersonalSessions() {
               <Clock size={14} /> Waiting for Approval
             </span>
           ) : (
-            <button onClick={() => setShowFindCoach(true)} className="btn-primary mobile-full-width-btn">
+            <button onClick={() => navigate('/member/coaches')} className="btn-primary mobile-full-width-btn">
               <UserCircle size={16} /> Find a Coach
             </button>
           )}
@@ -1376,7 +1377,7 @@ export default function MemberPersonalSessions() {
             className: 'mobile-coach-actions'
           }}>
             <button
-              onClick={() => setShowFindCoach(true)}
+              onClick={() => navigate('/member/coaches')}
               className="btn-outline-primary mobile-btn-xs"
             >
               Change
@@ -1922,180 +1923,6 @@ export default function MemberPersonalSessions() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Find Coach Modal */}
-      {showFindCoach && (
-        <div className="modal-overlay" onClick={() => setShowFindCoach(false)}>
-          <div className="modal-content mobile-modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-            <div style={{
-              padding: '16px 20px',
-              borderBottom: '1px solid var(--border)',
-              background: 'var(--surface-2)',
-              borderRadius: '18px 18px 0 0',
-              className: 'mobile-modal-padding'
-            }}>
-              <h3 style={{ 
-                fontSize: '17px', 
-                fontWeight: 700, 
-                margin: 0, 
-                color: 'var(--text)',
-                className: 'mobile-modal-title'
-              }}>
-                {coachStatus === 'approved' ? 'Change Coach' : 'Find a Coach'}
-              </h3>
-              <p style={{ 
-                fontSize: '12px', 
-                color: 'var(--text-3)', 
-                margin: '2px 0 0',
-                className: 'mobile-modal-subtitle'
-              }}>
-                {coachStatus === 'approved' ? 'Choose a different coach to work with' : 'Browse available coaches and choose one'}
-              </p>
-            </div>
-
-            <div className="modal-body mobile-modal-padding">
-              <div className="search-wrap" style={{ marginBottom: '14px' }}>
-                <Search size={18} />
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Search coaches..."
-                  value={searchCoach}
-                  onChange={(e) => setSearchCoach(e.target.value)}
-                />
-              </div>
-
-              {coaches.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                  <UserCircle size={32} color="var(--text-3)" style={{ margin: '0 auto 10px', opacity: 0.4 }} />
-                  <p style={{ fontSize: '14px', color: 'var(--text-2)' }}>No coaches available</p>
-                </div>
-              ) : (
-                <div style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  gap: '10px', 
-                  maxHeight: '400px', 
-                  overflowY: 'auto',
-                  className: 'mobile-coach-list'
-                }}>
-                  {filteredCoaches.map((coach) => {
-                    const coachId = Number(coach.id)
-                    const currentCoachId = Number(assignedCoach?.id)
-                    
-                    const isApproved = coachStatus === 'approved' && currentCoachId === coachId
-                    const isPending = coachStatus === 'pending' && currentCoachId === coachId
-                    
-                    return (
-                      <div
-                        key={coach.id}
-                        className="coach-card mobile-coach-item"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '14px 16px',
-                          borderRadius: '10px',
-                          background: isApproved ? 'var(--green)0D' : isPending ? 'var(--blue)0D' : 'var(--surface-2)',
-                          border: `1px solid ${
-                            isApproved ? 'var(--green)33' : 
-                            isPending ? 'var(--blue)33' : 
-                            'var(--border)'
-                          }`,
-                          flexWrap: 'wrap',
-                          gap: '8px'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: 1 }}>
-                          <div className={`coach-avatar ${
-                            isApproved ? 'coach-avatar-assigned' : 
-                            isPending ? 'coach-avatar-pending' : 
-                            'coach-avatar-available'
-                          }`}>
-                            {coach.name.charAt(0)}
-                          </div>
-                          <div style={{ flex: 1, minWidth: '120px' }}>
-                            <p style={{ 
-                              fontSize: '14px', 
-                              fontWeight: 700, 
-                              color: 'var(--text)',
-                              className: 'mobile-coach-name'
-                            }}>
-                              {coach.name}
-                            </p>
-                            <p style={{ 
-                              fontSize: '12px', 
-                              color: 'var(--text-3)',
-                              className: 'mobile-coach-specialty'
-                            }}>
-                              {coach.specialty || 'General Fitness'}
-                            </p>
-                            {coach.rating && (
-                              <p style={{ fontSize: '11px', color: 'var(--amber)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <Star size={12} fill="var(--amber)" />
-                                {coach.rating} • {coach.client_count || 0} clients
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        
-                        {isApproved ? (
-                          <span style={{
-                            padding: '4px 12px',
-                            borderRadius: '6px',
-                            background: 'var(--green)1A',
-                            color: 'var(--green)',
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            whiteSpace: 'nowrap'
-                          }}>
-                            Your Coach
-                          </span>
-                        ) : isPending ? (
-                          <span style={{
-                            padding: '4px 12px',
-                            borderRadius: '6px',
-                            background: 'var(--blue)1A',
-                            color: 'var(--blue)',
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            whiteSpace: 'nowrap'
-                          }}>
-                            <Clock size={12} /> Pending
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => showConfirm('assignCoach', coach.id)}
-                            className="btn-primary mobile-btn-sm"
-                            style={{ padding: '6px 16px', fontSize: '12px' }}
-                            disabled={submitting}
-                          >
-                            Assign
-                          </button>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="modal-footer mobile-modal-footer">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setShowFindCoach(false)}
-                style={{ flex: 1 }}
-              >
-                Close
-              </button>
-            </div>
           </div>
         </div>
       )}

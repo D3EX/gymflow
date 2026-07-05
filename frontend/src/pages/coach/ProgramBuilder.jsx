@@ -35,13 +35,14 @@ export default function ProgramBuilder({ program: initialProgram, clients, onBac
 
   const [editingMeta, setEditingMeta] = useState(false)
   const [meta, setMeta] = useState({ 
-    name: program.name, 
-    description: program.description || '', 
-    client_id: program.member_id || '' 
+    name: initialProgram?.name || '', 
+    description: initialProgram?.description || '', 
+    client_id: initialProgram?.member_id || '' 
   })
   const [savingMeta, setSavingMeta] = useState(false)
 
   const refresh = useCallback(async () => {
+    if (!program?.id) return
     try {
       const res = await api.get(`/programs/${program.id}`)
       setProgram(res.data)
@@ -52,19 +53,40 @@ export default function ProgramBuilder({ program: initialProgram, clients, onBac
         if (found) setProgram(found)
       } catch {}
     }
-  }, [program.id])
+  }, [program?.id])
 
   useEffect(() => { refresh() }, [])
 
   useEffect(() => {
-    if (!selectedDayId && program.weeks?.length) {
+    if (!selectedDayId && program?.weeks?.length) {
       const firstWeek = program.weeks[0]
       if (firstWeek?.days?.length) {
         setSelectedDayId(firstWeek.days[0].id)
         setOpenWeeks({ [firstWeek.id]: true })
       }
     }
-  }, [program.weeks])
+  }, [program?.weeks])
+
+  // Bail out to a safe fallback if this got mounted without a real program.
+  // All hooks above still run every render, so this is safe — it only
+  // skips the JSX that would otherwise crash on program.name, etc.
+  if (!program) {
+    return (
+      <div style={{
+        background: 'var(--bg)', color: 'var(--text)', minHeight: '100vh',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12,
+        fontFamily: "'Inter', -apple-system, sans-serif",
+      }}>
+        <p style={{ color: 'var(--text-3)', fontSize: 14 }}>Couldn't load this program.</p>
+        <button
+          onClick={onBack}
+          style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text)', cursor: 'pointer' }}
+        >
+          Back to Programs
+        </button>
+      </div>
+    )
+  }
 
   const selectedDay = program.weeks?.flatMap(w => w.days || []).find(d => d.id === selectedDayId)
   const selectedWeek = program.weeks?.find(w => w.days?.some(d => d.id === selectedDayId))
@@ -502,17 +524,68 @@ export default function ProgramBuilder({ program: initialProgram, clients, onBac
           display: flex;
           flex-direction: column;
         }
-        .stats-row {
+        .stats-strip {
           display: flex;
           align-items: center;
-          gap: 12px;
-          padding: 11px 0;
-          min-width: 0;
+          padding: 14px 0;
         }
-        .stats-row + .stats-row,
-        .stats-grid-row + .stats-row,
-        .stats-row + .stats-grid-row {
-          border-top: 1px solid var(--border);
+        .stats-strip-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex: 1;
+          min-width: 0;
+          padding: 0 16px;
+        }
+        .stats-strip-item:first-child { padding-left: 0; }
+        .stats-strip-item:last-child { padding-right: 0; }
+        .stats-strip-item + .stats-strip-item {
+          border-left: 1px solid rgba(255,255,255,0.09);
+        }
+        .stats-progress-row {
+          padding: 16px 0 2px;
+          border-top: 1px solid rgba(255,255,255,0.09);
+        }
+        .stats-progress-header {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          margin-bottom: 9px;
+        }
+        .stats-progress-pct {
+          margin: 0;
+          font-size: 13px;
+          font-weight: 800;
+          color: var(--accent);
+        }
+        .stats-progress-track {
+          height: 6px;
+          border-radius: 99px;
+          background: var(--surface-3);
+          overflow: hidden;
+        }
+        .stats-progress-fill {
+          height: 100%;
+          border-radius: 99px;
+          background: var(--accent);
+          transition: width 0.3s;
+        }
+        @media (max-width: 560px) {
+          .stats-strip {
+            flex-wrap: wrap;
+            row-gap: 14px;
+          }
+          .stats-strip-item {
+            flex: 1 1 45%;
+            padding: 0 12px;
+          }
+          .stats-strip-item:nth-child(odd) { padding-left: 0; }
+          .stats-strip-item + .stats-strip-item {
+            border-left: none;
+          }
+          .stats-strip-item:nth-child(2n) {
+            border-left: 1px solid rgba(255,255,255,0.09);
+          }
         }
         .stats-icon {
           width: 32px;
@@ -537,38 +610,12 @@ export default function ProgramBuilder({ program: initialProgram, clients, onBac
         }
         .stats-value {
           margin: 2px 0 0;
-          font-size: 13px;
+          font-size: 13.5px;
           font-weight: 700;
           color: var(--text);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
-        }
-        .stats-grid-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-        }
-        .stats-grid-cell {
-          padding: 12px 0;
-          text-align: center;
-        }
-        .stats-grid-cell + .stats-grid-cell {
-          border-left: 1px solid var(--border);
-        }
-        .stats-num {
-          font-size: 19px;
-          font-weight: 800;
-          letter-spacing: -0.03em;
-          color: var(--text);
-          margin: 0;
-        }
-        .stats-sub {
-          font-size: 9px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.07em;
-          color: var(--text-3);
-          margin-top: 2px;
         }
         .pb-header-row {
           display: flex;
@@ -713,68 +760,61 @@ export default function ProgramBuilder({ program: initialProgram, clients, onBac
             </p>
           )}
 
-          {/* Stats Panel — one unified card instead of stacked boxes */}
+          {/* Stats Panel — consistent icon+label strip, single progress bar (no redundant chart) */}
           <div className="stats-panel" style={{ marginTop: 18 }}>
-            <div className="stats-row">
-              <div className="stats-icon"><Users size={15} color="var(--text-2)" /></div>
-              <div style={{ minWidth: 0 }}>
-                <p className="stats-label">Member</p>
-                <p className="stats-value">{clientName}</p>
-              </div>
-            </div>
-
-            <div className="stats-grid-row">
-              <div className="stats-grid-cell">
-                <p className="stats-num">{program.weeks?.length || 0}</p>
-                <p className="stats-sub">Week{(program.weeks?.length || 0) !== 1 ? 's' : ''}</p>
-              </div>
-              <div className="stats-grid-cell">
-                <p className="stats-num">{totalEx}</p>
-                <p className="stats-sub">Exercise{totalEx !== 1 ? 's' : ''}</p>
-              </div>
-            </div>
-
-            {totalEx > 0 && (() => {
-              const pct = Math.round((doneEx / totalEx) * 100)
-              const r = 13
-              const circumference = 2 * Math.PI * r
-              return (
-                <div className="stats-row">
-                  <svg width={32} height={32} viewBox="0 0 32 32" style={{ flexShrink: 0 }}>
-                    <circle cx={16} cy={16} r={r} fill="none" stroke="var(--border)" strokeWidth={4} />
-                    <circle
-                      cx={16} cy={16} r={r} fill="none"
-                      stroke="var(--accent)" strokeWidth={4}
-                      strokeDasharray={circumference}
-                      strokeDashoffset={circumference * (1 - pct / 100)}
-                      strokeLinecap="round"
-                      transform="rotate(-90 16 16)"
-                    />
-                    <text x={16} y={20} textAnchor="middle" fontSize="8.5" fontWeight="800" fill="var(--text)">
-                      {pct}%
-                    </text>
-                  </svg>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                      <p className="stats-label">Progress</p>
-                      <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--accent)', margin: 0 }}>{pct}% done</p>
-                    </div>
-                    <div style={{ height: 5, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden', marginTop: 6 }}>
-                      <div style={{ height: '100%', width: `${pct}%`, background: 'var(--accent)', borderRadius: 99, transition: 'width 0.3s' }} />
-                    </div>
-                  </div>
+            <div className="stats-strip">
+              <div className="stats-strip-item">
+                <div className="stats-icon"><Users size={15} color="var(--text-2)" /></div>
+                <div style={{ minWidth: 0 }}>
+                  <p className="stats-label">Member</p>
+                  <p className="stats-value">{clientName}</p>
                 </div>
-              )
-            })()}
-
-            <div className="stats-row">
-              <div className="stats-icon"><Calendar size={15} color="var(--text-2)" /></div>
-              <div>
-                <p className="stats-label">Created on</p>
-                <p className="stats-value">
-                  {program.created_at ? new Date(program.created_at).toLocaleDateString() : '—'}
-                </p>
               </div>
+              <div className="stats-strip-item">
+                <div className="stats-icon"><Layers size={15} color="var(--text-2)" /></div>
+                <div style={{ minWidth: 0 }}>
+                  <p className="stats-label">Weeks</p>
+                  <p className="stats-value">{program.weeks?.length || 0}</p>
+                </div>
+              </div>
+              <div className="stats-strip-item">
+                <div className="stats-icon"><Activity size={15} color="var(--text-2)" /></div>
+                <div style={{ minWidth: 0 }}>
+                  <p className="stats-label">Exercises</p>
+                  <p className="stats-value">{totalEx}</p>
+                </div>
+              </div>
+              <div className="stats-strip-item">
+                <div className="stats-icon"><Calendar size={15} color="var(--text-2)" /></div>
+                <div style={{ minWidth: 0 }}>
+                  <p className="stats-label">Created</p>
+                  <p className="stats-value">
+                    {program.created_at ? new Date(program.created_at).toLocaleDateString() : '—'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="stats-progress-row">
+              {totalEx > 0 ? (() => {
+                const pct = Math.round((doneEx / totalEx) * 100)
+                return (
+                  <>
+                    <div className="stats-progress-header">
+                      <p className="stats-label">Progress</p>
+                      <p className="stats-progress-pct">{pct}%</p>
+                    </div>
+                    <div className="stats-progress-track">
+                      <div className="stats-progress-fill" style={{ width: `${pct}%` }} />
+                    </div>
+                  </>
+                )
+              })() : (
+                <div className="stats-progress-header" style={{ marginBottom: 0 }}>
+                  <p className="stats-label">Progress</p>
+                  <p className="stats-value" style={{ fontSize: 12 }}>No exercises yet</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

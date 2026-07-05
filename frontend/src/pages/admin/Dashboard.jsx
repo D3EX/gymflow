@@ -172,7 +172,7 @@ export default function Dashboard() {
 
   const giftOptions = [
     { id: 'free_days', name: '5 days free', icon: <Calendar size={18} />, description: 'Added to their membership', color: '#34d399', bg: 'rgba(52,211,153,0.08)' },
-    { id: 'supplement', name: 'Supplement pack', icon: <Coffee size={18} />, description: 'Free protein or supplement', color: '#fb7121', bg: 'rgba(251,113,33,0.08)' },
+    { id: 'supplement', name: 'Supplement pack', icon: <Coffee size={18} />, description: 'Free protein or supplement', color: '#C56A2A', bg: 'rgba(251,113,33,0.08)' },
     { id: 'discount', name: '20% off renewal', icon: <Tag size={18} />, description: 'Applied to next payment', color: '#60a5fa', bg: 'rgba(96,165,250,0.08)' },
     { id: 'personal_training', name: 'Free PT session', icon: <Dumbbell size={18} />, description: '1-on-1 personal training', color: '#a78bfa', bg: 'rgba(167,139,250,0.08)' },
     { id: 'gym_merch', name: 'Gym merch', icon: <Shirt size={18} />, description: 'T-shirt or towel', color: '#fbbf24', bg: 'rgba(251,191,36,0.08)' },
@@ -431,7 +431,7 @@ const fetchData = async () => {
   )
 
   const membershipData = [
-    { name: 'Monthly', value: 45, color: '#fb7121' },
+    { name: 'Monthly', value: 45, color: '#C56A2A' },
     { name: '3 Months', value: 30, color: '#34d399' },
     { name: '6 Months', value: 15, color: '#60a5fa' },
     { name: 'Yearly', value: 10, color: '#fbbf24' },
@@ -628,7 +628,7 @@ const fetchData = async () => {
 
       {/* ── Stat cards ──────────────────────────────────── */}
       <div className="stat-grid">
-        <StatCard icon={Users} iconColor="#fb7121" label="Members" value={stats?.total_members || 0}
+        <StatCard icon={Users} iconColor="#C56A2A" label="Members" value={stats?.total_members || 0}
           sub="active / expired"
           subGreen={`${stats?.active_subscriptions || 0} active`}
           subRed={`${stats?.expired_subscriptions || 0} expired`} />
@@ -661,7 +661,7 @@ const fetchData = async () => {
               background: 'rgba(251,113,33,0.12)',
               display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}>
-              <TrendingUp size={16} color="#fb7121" />
+              <TrendingUp size={16} color="#C56A2A" />
             </div>
             <div>
               <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)', margin: 0 }}>Revenue &amp; attendance</h3>
@@ -673,7 +673,7 @@ const fetchData = async () => {
               <button key={p} onClick={() => setChartPeriod(p)} style={{
                 padding: '5px 12px', borderRadius: 7, border: 'none',
                 fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                background: chartPeriod === p ? '#fb7121' : 'transparent',
+                background: chartPeriod === p ? '#C56A2A' : 'transparent',
                 color: chartPeriod === p ? '#fff' : 'var(--text-2)',
                 transition: 'all .15s'
               }}>
@@ -685,7 +685,7 @@ const fetchData = async () => {
 
         <div className="chart-legend" style={{ display: 'flex', gap: 20, marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 10, height: 10, borderRadius: 3, background: '#fb7121' }} />
+            <div style={{ width: 10, height: 10, borderRadius: 3, background: '#C56A2A' }} />
             <span style={{ fontSize: 11, color: 'var(--text-2)' }}>Revenue (DZD)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -701,7 +701,7 @@ const fetchData = async () => {
             <YAxis yAxisId="left" stroke="transparent" tick={{ fontSize: 11, fill: 'var(--text-2)' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
             <YAxis yAxisId="right" orientation="right" stroke="transparent" tick={{ fontSize: 11, fill: 'var(--text-2)' }} axisLine={false} tickLine={false} />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-            <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#fb7121" radius={[5, 5, 0, 0]} />
+            <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#C56A2A" radius={[5, 5, 0, 0]} />
             <Bar yAxisId="right" dataKey="attendance" name="Attendance" fill="#34d399" radius={[5, 5, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
@@ -711,7 +711,7 @@ const fetchData = async () => {
       <div className="three-col">
         {/* Most active members */}
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <SectionHeader icon={Award} iconColor="#fb7121" title="Most active"
+          <SectionHeader icon={Award} iconColor="#C56A2A" title="Most active"
             right={<span style={{ fontSize: 11, color: 'var(--text-3)' }}>This month</span>} />
           <div style={{ flex: 1 }}>
             {topMembers.length > 0 ? (
@@ -734,7 +734,7 @@ const fetchData = async () => {
                       <p style={{ fontSize: 11, color: 'var(--text-3)', margin: 0 }}>ID #{m.id}</p>
                     </div>
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <p style={{ fontSize: 16, fontWeight: 700, color: '#fb7121', margin: 0, lineHeight: 1 }}>{m.visits}</p>
+                      <p style={{ fontSize: 16, fontWeight: 700, color: '#C56A2A', margin: 0, lineHeight: 1 }}>{m.visits}</p>
                       <p style={{ fontSize: 10, color: 'var(--text-3)', margin: '2px 0 0' }}>visits</p>
                     </div>
                   </div>
@@ -757,7 +757,7 @@ const fetchData = async () => {
         {/* Birthdays today */}
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', height: '100%' }}>
           <SectionHeader icon={Gift} iconColor="#34d399" title="Birthdays today"
-            right={birthdays.length > 3 ? <button onClick={() => setShowAllBirthdays(true)} style={{ fontSize: 11, color: '#fb7121', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>View all ({birthdays.length})</button> : null} />
+            right={birthdays.length > 3 ? <button onClick={() => setShowAllBirthdays(true)} style={{ fontSize: 11, color: '#C56A2A', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>View all ({birthdays.length})</button> : null} />
           <div style={{ flex: 1 }}>
             {birthdays.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -773,7 +773,7 @@ const fetchData = async () => {
                       background: 'rgba(251,113,33,0.15)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center'
                     }}>
-                      <Gift size={15} color="#fb7121" />
+                      <Gift size={15} color="#C56A2A" />
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{b.name}</p>
@@ -782,7 +782,7 @@ const fetchData = async () => {
                     <button onClick={() => handleWish(b)} style={{
                       flexShrink: 0, padding: '6px 12px',
                       borderRadius: 8, border: 'none',
-                      background: '#fb7121', color: '#fff',
+                      background: '#C56A2A', color: '#fff',
                       fontSize: 11, fontWeight: 600, cursor: 'pointer',
                       display: 'flex', alignItems: 'center', gap: 5,
                     }}>
@@ -818,7 +818,7 @@ const fetchData = async () => {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="130" height="130" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="38" fill="none" stroke="#fb7121" strokeWidth="14"
+                <circle cx="50" cy="50" r="38" fill="none" stroke="#C56A2A" strokeWidth="14"
                   strokeDasharray="107.44 131.32" strokeDashoffset="0" transform="rotate(-90 50 50)" />
                 <circle cx="50" cy="50" r="38" fill="none" stroke="#34d399" strokeWidth="14"
                   strokeDasharray="71.63 167.13" strokeDashoffset="-107.44" transform="rotate(-90 50 50)" />
@@ -849,7 +849,7 @@ const fetchData = async () => {
             </div>
             <div style={{ width: '100%', paddingTop: 10, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Most popular plan</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#fb7121' }}>Monthly</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#C56A2A' }}>Monthly</span>
             </div>
           </div>
         </div>
@@ -858,7 +858,7 @@ const fetchData = async () => {
       <div className="two-col">
         {/* Recent members */}
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <SectionHeader icon={Users} iconColor="#fb7121" title="Recent members"
+          <SectionHeader icon={Users} iconColor="#C56A2A" title="Recent members"
             right={<Pill text="Last 5 joined" color="var(--text-2)" bg="var(--surface-2)" />} />
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -873,7 +873,7 @@ const fetchData = async () => {
                   }}>
                     <div style={{
                       width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                      background: 'linear-gradient(135deg, #fb7121 0%, #ff9a56 100%)',
+                      background: 'linear-gradient(135deg, #C56A2A 0%, #ff9a56 100%)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 13, fontWeight: 700, color: '#fff'
                     }}>{name[0].toUpperCase()}</div>
@@ -899,8 +899,8 @@ const fetchData = async () => {
 
 {/* Expiring soon */}
 <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 16, padding: '20px', display: 'flex', flexDirection: 'column', height: '100%' }}>
-  <SectionHeader icon={AlertTriangle} iconColor="#fb7121" title="Expiring soon"
-    right={<Pill text={`${expiringSubs.length} members`} color="#fb7121" bg="rgba(251,113,33,0.1)" />} />
+  <SectionHeader icon={AlertTriangle} iconColor="#C56A2A" title="Expiring soon"
+    right={<Pill text={`${expiringSubs.length} members`} color="#C56A2A" bg="rgba(251,113,33,0.1)" />} />
   
   <div style={{ flex: 1 }}>
     {expiringSubs.length > 0 ? (
@@ -908,7 +908,7 @@ const fetchData = async () => {
         {expiringSubs.slice(0, 5).map((sub, i) => {
           const days = sub.daysLeft || 0
           const isUrgent = days <= 3
-          const accent = isUrgent ? '#fb7121' : '#34d399'
+          const accent = isUrgent ? '#C56A2A' : '#34d399'
           const memberName = sub.member_name || sub.member?.user?.name || 'Member'
           const plan = sub.plan || 'Plan'
           const amount = sub.amount || 0
@@ -934,7 +934,7 @@ const fetchData = async () => {
                 </div>
                 <p style={{ fontSize: 10, color: 'var(--text-3)', margin: 0 }}>
                   Expires in <strong style={{ color: accent }}>{days} days</strong>
-                  {days <= 3 && <span style={{ marginLeft: 4, fontSize: 8, color: '#fb7121' }}>⚠️</span>}
+                  {days <= 3 && <span style={{ marginLeft: 4, fontSize: 8, color: '#C56A2A' }}>⚠️</span>}
                 </p>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -973,7 +973,7 @@ const fetchData = async () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ width: 32, height: 32, borderRadius: 9, background: 'rgba(251,113,33,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <UserPlus size={16} color="#fb7121" />
+                  <UserPlus size={16} color="#C56A2A" />
                 </div>
                 <h2 className="modal-title" style={{ margin: 0, fontSize: 16 }}>Add New Member</h2>
               </div>
@@ -1078,7 +1078,7 @@ const fetchData = async () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ width: 32, height: 32, borderRadius: 9, background: 'rgba(251,113,33,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <UserCheck size={16} color="#fb7121" />
+                  <UserCheck size={16} color="#C56A2A" />
                 </div>
                 <h2 className="modal-title" style={{ margin: 0, fontSize: 16 }}>Check In Member</h2>
               </div>
@@ -1099,19 +1099,19 @@ const fetchData = async () => {
                       display: 'flex', alignItems: 'center', gap: 12, padding: '12px',
                       borderRadius: 10, cursor: 'pointer',
                       background: selectedCheckinMember?.id === member.id ? 'rgba(251,113,33,0.1)' : 'var(--surface-2)',
-                      border: selectedCheckinMember?.id === member.id ? '1px solid #fb7121' : '1px solid transparent'
+                      border: selectedCheckinMember?.id === member.id ? '1px solid #C56A2A' : '1px solid transparent'
                     }}>
                       <div style={{
                         width: 40, height: 40, borderRadius: '50%',
-                        background: selectedCheckinMember?.id === member.id ? '#fb7121' : 'var(--surface-3)',
+                        background: selectedCheckinMember?.id === member.id ? '#C56A2A' : 'var(--surface-3)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 14, fontWeight: 700, color: selectedCheckinMember?.id === member.id ? '#fff' : '#fb7121'
+                        fontSize: 14, fontWeight: 700, color: selectedCheckinMember?.id === member.id ? '#fff' : '#C56A2A'
                       }}>{member.user.name.charAt(0).toUpperCase()}</div>
                       <div style={{ flex: 1 }}>
                         <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>{member.user.name}</p>
                         <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>{member.user.email}</p>
                       </div>
-                      {selectedCheckinMember?.id === member.id && <CheckCircle size={18} color="#fb7121" />}
+                      {selectedCheckinMember?.id === member.id && <CheckCircle size={18} color="#C56A2A" />}
                     </div>
                   ))}
                 </div>
@@ -1190,7 +1190,7 @@ const fetchData = async () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ width: 32, height: 32, borderRadius: 9, background: 'rgba(251,113,33,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Gift size={16} color="#fb7121" />
+                  <Gift size={16} color="#C56A2A" />
                 </div>
                 <div>
                   <h2 className="modal-title" style={{ margin: 0, fontSize: 16 }}>Birthday celebrations</h2>
@@ -1203,7 +1203,7 @@ const fetchData = async () => {
               {birthdays.map(b => (
                 <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10, background: 'rgba(52,211,153,0.04)', border: '1px solid rgba(52,211,153,0.12)' }}>
                   <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'rgba(251,113,33,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Gift size={16} color="#fb7121" />
+                    <Gift size={16} color="#C56A2A" />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', margin: 0 }}>{b.name}</p>
@@ -1211,7 +1211,7 @@ const fetchData = async () => {
                   </div>
                   <button onClick={() => { setShowAllBirthdays(false); handleWish(b) }} style={{
                     padding: '6px 14px', borderRadius: 8, border: 'none',
-                    background: '#fb7121', color: '#fff',
+                    background: '#C56A2A', color: '#fff',
                     fontSize: 12, fontWeight: 600, cursor: 'pointer',
                     display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0
                   }}>
@@ -1237,7 +1237,7 @@ const fetchData = async () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(251,113,33,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Gift size={18} color="#fb7121" />
+                  <Gift size={18} color="#C56A2A" />
                 </div>
                 <div>
                   <h2 className="modal-title" style={{ margin: 0, fontSize: 15 }}>Choose a gift for {selectedBirthdayMember.name}</h2>
@@ -1252,7 +1252,7 @@ const fetchData = async () => {
               background: 'rgba(251,113,33,0.06)',
               border: '1px solid rgba(251,113,33,0.18)'
             }}>
-              <Cake size={22} color="#fb7121" />
+              <Cake size={22} color="#C56A2A" />
               <div>
                 <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', margin: 0 }}> Happy birthday, {selectedBirthdayMember.name}!</p>
                 <p style={{ fontSize: 11, color: 'var(--text-3)', margin: '2px 0 0' }}>Pick a gift to send alongside your wishes</p>

@@ -4,7 +4,7 @@ import {
   UserPlus, Edit, Trash2, Shield, Users, Calendar,
   Award, Search, MapPin, Star, Upload, X,
   Instagram, Twitter, Linkedin, Globe, Mail, Phone,
-  TrendingUp, CheckCircle, Briefcase, Heart, AlertCircle
+  TrendingUp, CheckCircle, Briefcase, Heart, AlertCircle, AlertTriangle
 } from 'lucide-react'
 import Modal from "../../components/Modal"
 import api from "../../api/client"
@@ -19,6 +19,7 @@ export default function Staff() {
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [selectedStaff, setSelectedStaff] = useState(null)
   const [editingStaff, setEditingStaff] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [formErrors, setFormErrors] = useState({})
   const [formData, setFormData] = useState({
@@ -169,16 +170,21 @@ export default function Staff() {
     }
   }
 
-  const handleDelete = async (id) => {
-    if (confirm('Delete this staff member?')) {
-      try {
-        await api.delete(`/staff/${id}`)
-        toast.success('Staff deleted')
-        await loadStaff()
-      } catch (error) {
-        console.error('Failed to delete staff', error)
-        toast.error('Failed to delete staff member')
-      }
+  const handleDelete = (id, name) => {
+    setDeleteTarget({ id, name })
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    try {
+      await api.delete(`/staff/${deleteTarget.id}`)
+      toast.success('Staff deleted')
+      await loadStaff()
+    } catch (error) {
+      console.error('Failed to delete staff', error)
+      toast.error('Failed to delete staff member')
+    } finally {
+      setDeleteTarget(null)
     }
   }
 
@@ -585,7 +591,7 @@ export default function Staff() {
                     <Edit size={12} /> Edit
                   </button>
                   <button
-                    onClick={e => { e.stopPropagation(); handleDelete(member.id) }}
+                    onClick={e => { e.stopPropagation(); handleDelete(member.id, member.user?.name || member.name) }}
                     className="btn btn-sm btn-danger"
                     style={{ padding: '6px 14px', fontSize: '12px' }}
                   >
@@ -1402,6 +1408,109 @@ export default function Staff() {
             <button type="button" onClick={() => { setIsModalOpen(false); resetForm() }} className="btn btn-ghost">Cancel</button>
           </div>
         </form>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title=""
+        size="sm"
+      >
+        <div
+          style={{
+            padding: '12px 8px 4px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+          }}
+        >
+          <div
+            style={{
+              width: '72px',
+              height: '72px',
+              borderRadius: '50%',
+              background: 'rgba(251, 113, 33, 0.10)',
+              border: '1px solid rgba(251, 113, 33, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '22px',
+            }}
+          >
+            <AlertTriangle size={30} color="#C56A2A" strokeWidth={2} />
+          </div>
+
+          <h3
+            style={{
+              fontSize: '18px',
+              fontWeight: 700,
+              color: 'var(--text)',
+              margin: '0 0 10px',
+            }}
+          >
+            Delete Staff Member
+          </h3>
+
+          <p
+            style={{
+              fontSize: '14px',
+              color: 'var(--text-muted)',
+              lineHeight: 1.6,
+              maxWidth: '320px',
+              margin: '0 auto 28px',
+            }}
+          >
+            Are you sure you want to delete{' '}
+            <span style={{ color: 'var(--text)', fontWeight: 600 }}>
+              {deleteTarget?.name || 'this staff member'}
+            </span>
+            ? This will permanently remove their account and cannot be undone.
+          </p>
+
+          <div
+            style={{
+              width: '100%',
+              borderTop: '1px solid var(--border)',
+              paddingTop: '20px',
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '12px',
+            }}
+          >
+            <button
+              onClick={() => setDeleteTarget(null)}
+              className="btn btn-secondary"
+              style={{ flex: '0 1 140px', fontWeight: 500 }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmDelete}
+              className="btn"
+              style={{
+                flex: '0 1 140px',
+                background: '#C56A2A',
+                color: '#fff',
+                border: 'none',
+                fontWeight: 600,
+                boxShadow: '0 2px 10px rgba(251, 113, 33, 0.35)',
+                transition: 'background 0.15s, box-shadow 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = '#e5620f'
+                e.currentTarget.style.boxShadow = '0 2px 14px rgba(251, 113, 33, 0.45)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = '#C56A2A'
+                e.currentTarget.style.boxShadow = '0 2px 10px rgba(251, 113, 33, 0.35)'
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

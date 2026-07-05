@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import api from "../../api/client"
 import toast from 'react-hot-toast'
-import { Edit, Trash2, UserPlus, Search, X, Users, Calendar, Activity, DollarSign, Filter, Download, Eye, Phone } from 'lucide-react'
+import { Edit, Trash2, UserPlus, Search, X, Users, Calendar, Activity, DollarSign, Filter, Download, Eye, Phone, AlertTriangle } from 'lucide-react'
 import Modal from "../../components/Modal"
 import { Link } from 'react-router-dom'
 
@@ -39,7 +39,7 @@ function exportToExcel(members) {
       <![endif]-->
       <style>
         table { border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; }
-        th { background: #fb7121; color: #ffffff; font-weight: 700; padding: 8px 12px; border: 1px solid #ddd; text-align: left; }
+        th { background: #C56A2A; color: #ffffff; font-weight: 700; padding: 8px 12px; border: 1px solid #ddd; text-align: left; }
         td { padding: 6px 12px; border: 1px solid #ddd; }
         tr:nth-child(even) { background: #f9f9f9; }
         .status-active { color: #22c55e; font-weight: 600; }
@@ -109,6 +109,7 @@ export default function Members() {
   const PER_PAGE = 10
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingMember, setEditingMember] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -211,15 +212,20 @@ export default function Members() {
     }
   }
 
-  const handleDelete = async (id, name) => {
-    if (confirm(`Delete member "${name}"?`)) {
-      try {
-        await api.delete(`/members/${id}`)
-        toast.success('Member deleted')
-        fetchMembers()
-      } catch (error) {
-        toast.error('Failed to delete member')
-      }
+  const handleDelete = (id, name) => {
+    setDeleteTarget({ id, name })
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    try {
+      await api.delete(`/members/${deleteTarget.id}`)
+      toast.success('Member deleted')
+      fetchMembers()
+    } catch (error) {
+      toast.error('Failed to delete member')
+    } finally {
+      setDeleteTarget(null)
     }
   }
 
@@ -440,7 +446,7 @@ export default function Members() {
       <div className="stats-grid">
         <div className="card" style={{ padding: '16px' }}>
           <div className="flex items-center justify-between mb-2">
-            <Users size={20} color="#fb7121" />
+            <Users size={20} color="#C56A2A" />
             <span className="text-xs text-muted">Total</span>
           </div>
           <div className="stat-value">{members.length}</div>
@@ -523,7 +529,7 @@ export default function Members() {
                 <tr key={member.id}>
                   <td>
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-surface-2 rounded-full flex items-center justify-center text-sm font-semibold" style={{ color: '#fb7121' }}>
+                      <div className="w-10 h-10 bg-surface-2 rounded-full flex items-center justify-center text-sm font-semibold" style={{ color: '#C56A2A' }}>
                         {member.user.name.charAt(0)}
                       </div>
                       <div>
@@ -592,7 +598,7 @@ export default function Members() {
           {paginatedMembers.map((member) => (
             <div className="mobile-member-card" key={member.id}>
               <div className="top-row">
-                <div className="w-10 h-10 bg-surface-2 rounded-full flex items-center justify-center text-sm font-semibold" style={{ color: '#fb7121', flexShrink: 0 }}>
+                <div className="w-10 h-10 bg-surface-2 rounded-full flex items-center justify-center text-sm font-semibold" style={{ color: '#C56A2A', flexShrink: 0 }}>
                   {member.user.name.charAt(0)}
                 </div>
                 <div className="info">
@@ -667,7 +673,7 @@ export default function Members() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               transition: 'border-color 0.15s',
             }}
-            onMouseEnter={e => { if (page !== 1) e.currentTarget.style.borderColor = '#fb7121' }}
+            onMouseEnter={e => { if (page !== 1) e.currentTarget.style.borderColor = '#C56A2A' }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
           >‹</button>
 
@@ -688,13 +694,13 @@ export default function Members() {
                   style={{
                     width: '36px', height: '36px', borderRadius: '8px',
                     border: page === item ? 'none' : '1px solid var(--border)',
-                    background: page === item ? '#fb7121' : 'var(--surface)',
+                    background: page === item ? '#C56A2A' : 'var(--surface)',
                     color: page === item ? '#fff' : 'var(--text)',
                     fontSize: '13px', fontWeight: page === item ? 700 : 500,
                     cursor: 'pointer', transition: 'all 0.15s',
                     boxShadow: page === item ? '0 2px 8px rgba(251,113,33,0.35)' : 'none',
                   }}
-                  onMouseEnter={e => { if (page !== item) e.currentTarget.style.borderColor = '#fb7121' }}
+                  onMouseEnter={e => { if (page !== item) e.currentTarget.style.borderColor = '#C56A2A' }}
                   onMouseLeave={e => { if (page !== item) e.currentTarget.style.borderColor = 'var(--border)' }}
                 >{item}</button>
               )
@@ -711,7 +717,7 @@ export default function Members() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               transition: 'border-color 0.15s',
             }}
-            onMouseEnter={e => { if (page !== totalPages) e.currentTarget.style.borderColor = '#fb7121' }}
+            onMouseEnter={e => { if (page !== totalPages) e.currentTarget.style.borderColor = '#C56A2A' }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
           >›</button>
 
@@ -841,6 +847,109 @@ export default function Members() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title=""
+        size="sm"
+      >
+        <div
+          style={{
+            padding: '12px 8px 4px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+          }}
+        >
+          <div
+            style={{
+              width: '72px',
+              height: '72px',
+              borderRadius: '50%',
+              background: 'rgba(251, 113, 33, 0.10)',
+              border: '1px solid rgba(251, 113, 33, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '22px',
+            }}
+          >
+            <AlertTriangle size={30} color="#C56A2A" strokeWidth={2} />
+          </div>
+
+          <h3
+            style={{
+              fontSize: '18px',
+              fontWeight: 700,
+              color: 'var(--text)',
+              margin: '0 0 10px',
+            }}
+          >
+            Delete Member
+          </h3>
+
+          <p
+            style={{
+              fontSize: '14px',
+              color: 'var(--text-muted)',
+              lineHeight: 1.6,
+              maxWidth: '320px',
+              margin: '0 auto 28px',
+            }}
+          >
+            Are you sure you want to delete{' '}
+            <span style={{ color: 'var(--text)', fontWeight: 600 }}>
+              {deleteTarget?.name}
+            </span>
+            ? This will permanently remove their account and cannot be undone.
+          </p>
+
+          <div
+            style={{
+              width: '100%',
+              borderTop: '1px solid var(--border)',
+              paddingTop: '20px',
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '12px',
+            }}
+          >
+            <button
+              onClick={() => setDeleteTarget(null)}
+              className="btn btn-secondary"
+              style={{ flex: '0 1 140px', fontWeight: 500 }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmDelete}
+              className="btn"
+              style={{
+                flex: '0 1 140px',
+                background: '#C56A2A',
+                color: '#fff',
+                border: 'none',
+                fontWeight: 600,
+                boxShadow: '0 2px 10px rgba(251, 113, 33, 0.35)',
+                transition: 'background 0.15s, box-shadow 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = '#e5620f'
+                e.currentTarget.style.boxShadow = '0 2px 14px rgba(251, 113, 33, 0.45)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = '#C56A2A'
+                e.currentTarget.style.boxShadow = '0 2px 10px rgba(251, 113, 33, 0.35)'
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

@@ -168,97 +168,6 @@ class NoteUpdate(BaseModel):
 # HELPER FUNCTIONS
 # ============================================================
 
-def assign_coach_program_to_member(db: Session, member_id: int, coach_name: str):
-    """
-    Helper: Assign coach's active program to a member.
-    Copies the entire program structure (weeks, days, exercises).
-    """
-    
-    # Find the coach's active program
-    coach_program = db.query(Program).filter(
-        Program.coach_name == coach_name,
-        Program.is_active == True
-    ).first()
-    
-    if not coach_program:
-        return {"assigned": False, "message": f"No active program found for coach {coach_name}"}
-    
-    # Deactivate ALL existing active programs for the member
-    existing_programs = db.query(Program).filter(
-        Program.member_id == member_id,
-        Program.is_active == True
-    ).all()
-    for prog in existing_programs:
-        prog.is_active = False
-    
-    # Create a copy of the coach's program for this member
-    new_program = Program(
-        member_id=member_id,
-        name=coach_program.name,
-        description=coach_program.description,
-        start_date=coach_program.start_date,
-        end_date=coach_program.end_date,
-        coach_name=coach_name,
-        is_active=True
-    )
-    db.add(new_program)
-    db.flush()
-    
-    # Copy weeks, days, and exercises from coach's program
-    for week in coach_program.weeks:
-        new_week = ProgramWeek(
-            program_id=new_program.id,
-            week_number=week.week_number,
-            focus=week.focus
-        )
-        db.add(new_week)
-        db.flush()
-        
-        for day in week.days:
-            new_day = ProgramDay(
-                week_id=new_week.id,
-                day_of_week=day.day_of_week,
-                is_rest_day=day.is_rest_day
-            )
-            db.add(new_day)
-            db.flush()
-            
-            for exercise in day.exercises:
-                new_exercise = Exercise(
-                    day_id=new_day.id,
-                    name=exercise.name,
-                    sets=exercise.sets,
-                    reps=exercise.reps,
-                    weight=exercise.weight,
-                    duration=exercise.duration,
-                    targets=exercise.targets,
-                    notes=exercise.notes,
-                    is_custom=exercise.is_custom,
-                    done=False
-                )
-                db.add(new_exercise)
-    
-    # Get member for notification
-    member = db.query(Member).filter(Member.id == member_id).first()
-    
-    # Create notification for the member
-    notification = Notification(
-        member_id=member_id,
-        title="New Program Assigned!",
-        message=f"Coach {coach_name} has assigned you their program: '{coach_program.name}'. Check it out in your training section!",
-        type="success"
-    )
-    db.add(notification)
-    
-    db.commit()
-    
-    return {
-        "assigned": True, 
-        "program_name": coach_program.name,
-        "program_id": new_program.id
-    }
-
-
 def remove_program_from_member(db: Session, member_id: int, coach_name: str):
     """Remove/deactivate coach's program from a member"""
     programs = db.query(Program).filter(
@@ -606,13 +515,14 @@ def approve_client_assignment(
     member = db.query(Member).filter(Member.id == assignment.client_id).first()
     coach = db.query(User).filter(User.id == assignment.coach_id).first()
     
+    # No program is auto-assigned here. The coach must explicitly
+    # create/assign a program for this specific member from their
+    # Programs page — nothing gets copied or shared automatically.
     if member and coach:
-        result = assign_coach_program_to_member(db, member.id, coach.name)
-        
         member_notification = Notification(
             member_id=member.id,
             title="Coach Assignment Approved!",
-            message=f"Coach {coach.name} has approved your assignment. Their program has been assigned to you!",
+            message=f"Coach {coach.name} has approved your assignment.",
             type="success",
             is_read=False
         )
@@ -814,7 +724,10 @@ def get_available_coaches(
             "specialty": staff_profile.specialty if staff_profile else "General Fitness",
             "bio": staff_profile.bio if staff_profile else "",
             "experience": staff_profile.experience if staff_profile else "0",
-            "rating": 4.5,
+            "certifications": staff_profile.certifications if staff_profile else None,
+            "achievements": staff_profile.achievements if staff_profile else None,
+            "avatar": staff_profile.avatar if staff_profile else None,
+            "rating": staff_profile.rating if staff_profile and staff_profile.rating else 0,
             "client_count": client_count,
             "availability": [
                 {
@@ -1202,6 +1115,64 @@ def add_client_progress(
     db.refresh(progress)
     
     return progress
+
+
+@router.get("/progress/trend")
+def get_client_progress_trend(
+    weeks: int = 8,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["coach", "admin"]))
+):
+    """
+    Dashboard "Client Progress Trend": average body-fat % across all of
+    the coach's active clients, bucketed by week, for the last `weeks`
+    weeks. ClientProgress check-ins are logged manually (weigh-ins),
+    not daily, so this buckets by week and only returns weeks that
+    actually have at least one logged entry — no fabricated zeros.
+    """
+    if current_user.role == "admin":
+        client_ids = [
+            m.id for m in db.query(Member)
+            .join(User, Member.user_id == User.id)
+            .filter(User.gym_id == current_user.gym_id, Member.status == "active")
+            .all()
+        ]
+    else:
+        coach_clients = db.query(CoachClient).filter(
+            CoachClient.coach_id == current_user.id,
+            CoachClient.is_active == True,
+            CoachClient.status == "approved"
+        ).all()
+        client_ids = [cc.client_id for cc in coach_clients]
+
+    if not client_ids:
+        return []
+
+    window_start = date_type.today() - timedelta(weeks=weeks)
+    entries = db.query(ClientProgress).filter(
+        ClientProgress.client_id.in_(client_ids),
+        ClientProgress.date >= window_start,
+        ClientProgress.body_fat.isnot(None)
+    ).order_by(ClientProgress.date).all()
+
+    if not entries:
+        return []
+
+    buckets = {}
+    for e in entries:
+        week_start = e.date - timedelta(days=e.date.weekday())
+        buckets.setdefault(week_start, []).append(e.body_fat)
+
+    result = []
+    for week_start in sorted(buckets.keys()):
+        values = buckets[week_start]
+        result.append({
+            "week_start": week_start.isoformat(),
+            "avg_body_fat": round(sum(values) / len(values), 1),
+            "entry_count": len(values)
+        })
+
+    return result
 
 
 @router.get("/progress/{client_id}")

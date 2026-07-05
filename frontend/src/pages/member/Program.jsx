@@ -5,7 +5,7 @@ import api from '../../api/client'
 import { 
   Dumbbell, CheckCircle, Target, ChevronLeft, ChevronRight, Activity, 
   Zap, Loader2, Plus, X, Search, Calendar, Trash2, 
-  Save, Users, UserCircle, ChevronDown, Eye 
+  Save, Users, UserCircle, ChevronDown, Eye, Star, Clock, AlertTriangle, AlertCircle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -309,6 +309,17 @@ export default function MemberProgram() {
   const [hasCoach, setHasCoach] = useState(false)
   const [hasCoachButNoProgram, setHasCoachButNoProgram] = useState(false)
   const [isCoachProgram, setIsCoachProgram] = useState(false)
+
+  // Find a Coach modal — mirrors the same state/endpoints as PersonalSessions.jsx
+  const [showFindCoach, setShowFindCoach] = useState(false)
+  const [coaches, setCoaches] = useState([])
+  const [searchCoach, setSearchCoach] = useState('')
+  const [assignedCoach, setAssignedCoach] = useState(null)
+  const [coachStatus, setCoachStatus] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [confirmAction, setConfirmAction] = useState(null)
+  const [confirmData, setConfirmData] = useState(null)
   
   const [showWeekBuilder, setShowWeekBuilder] = useState(false)
   const [newWeekFocus, setNewWeekFocus] = useState('')
@@ -361,6 +372,125 @@ export default function MemberProgram() {
       if (intervalId) clearInterval(intervalId)
     }
   }, [hasProgram, program])
+
+  // Coach lookup / assignment — same endpoints as PersonalSessions.jsx so
+  // both pages stay in sync with the backend's coach-request workflow.
+  const fetchMyCoach = async () => {
+    try {
+      const coachRes = await api.get('/coach/my-coach')
+      const status = coachRes.data.status
+      setCoachStatus(status)
+      if (coachRes.data.coach) {
+        setAssignedCoach(coachRes.data.coach)
+      } else {
+        setAssignedCoach(null)
+      }
+    } catch (error) {
+      console.error('Error fetching coach info:', error)
+      setCoachStatus(null)
+      setAssignedCoach(null)
+    }
+  }
+
+  const fetchAvailableCoaches = async () => {
+    try {
+      const res = await api.get('/coach/available')
+      setCoaches(res.data || [])
+    } catch (error) {
+      console.error('Error fetching coaches:', error)
+      setCoaches([])
+    }
+  }
+
+  const openFindCoach = async () => {
+    setShowFindCoach(true)
+    await Promise.all([fetchMyCoach(), fetchAvailableCoaches()])
+  }
+
+  const showConfirm = (action, data) => {
+    setConfirmAction(action)
+    setConfirmData(data)
+    setShowConfirmModal(true)
+  }
+
+  const handleConfirm = async () => {
+    setShowConfirmModal(false)
+    if (confirmAction === 'assignCoach') {
+      await handleAssignCoach(confirmData)
+    } else if (confirmAction === 'removeCoach') {
+      await handleRemoveCoach()
+    }
+    setConfirmAction(null)
+    setConfirmData(null)
+  }
+
+  const handleAssignCoach = async (coachId) => {
+    setSubmitting(true)
+    try {
+      const response = await api.post(`/coach/assign-self/${coachId}`)
+      const data = response.data
+
+      if (data.status === 'pending') {
+        toast.success(data.message || 'Request sent to coach! Waiting for approval.')
+        setCoachStatus('pending')
+
+        const coach = coaches.find(c => c.id === coachId)
+        if (coach) setAssignedCoach(coach)
+
+        setShowFindCoach(false)
+        await fetchAvailableCoaches()
+      } else if (data.status === 'approved') {
+        toast.success(data.message || 'Coach assigned successfully!')
+        setCoachStatus('approved')
+
+        const coach = coaches.find(c => c.id === coachId)
+        if (coach) setAssignedCoach(coach)
+
+        setShowFindCoach(false)
+        await fetchProgram()
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.detail || 'Failed to assign coach'
+      if (errorMessage.includes('pending request')) {
+        toast.info('You already have a pending request with this coach. Waiting for approval.')
+        setCoachStatus('pending')
+
+        const coach = coaches.find(c => c.id === coachId)
+        if (coach) setAssignedCoach(coach)
+
+        setShowFindCoach(false)
+        await fetchAvailableCoaches()
+      } else {
+        toast.error(errorMessage)
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleRemoveCoach = async () => {
+    setSubmitting(true)
+    try {
+      await api.delete('/coach/unassign-self')
+      toast.success('Coach removed successfully')
+      setAssignedCoach(null)
+      setCoachStatus(null)
+      setShowConfirmModal(false)
+      await fetchProgram()
+    } catch (error) {
+      console.error('Error removing coach:', error)
+      const errorMessage = error.response?.data?.detail || error.response?.data?.message || 'Failed to remove coach'
+      toast.error(errorMessage)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const filteredCoaches = coaches.filter(coach =>
+    coach.name.toLowerCase().includes(searchCoach.toLowerCase()) ||
+    coach.specialty?.toLowerCase().includes(searchCoach.toLowerCase()) ||
+    coach.bio?.toLowerCase().includes(searchCoach.toLowerCase())
+  )
 
   const fetchProgram = async () => {
     setLoading(true)
@@ -629,6 +759,7 @@ export default function MemberProgram() {
 
   if (!hasProgram) {
     return (
+      <>
       <div style={{
         background: 'var(--bg)',
         color: 'var(--text)',
@@ -667,7 +798,7 @@ export default function MemberProgram() {
                 Waiting for Your Coach
               </p>
               <p style={{ fontSize: '14px', color: 'var(--text-3)', maxWidth: '380px', margin: '0 auto', lineHeight: 1.6 }}>
-                Your coach hasn't assigned a training program yet. Reach out to them to get started — it'll appear here automatically once they do.
+                Your coach hasn't assigned a training program yet. Reach out to them to get started  it'll appear here automatically once they do.
               </p>
             </>
           ) : (
@@ -679,7 +810,7 @@ export default function MemberProgram() {
                 You don't have a coach assigned yet. Find a coach to get a personalized training program.
               </p>
               <button
-                onClick={() => window.location.href = '/member/coaches'}
+                onClick={openFindCoach}
                 style={{
                   marginTop: '20px',
                   padding: '10px 24px',
@@ -701,6 +832,225 @@ export default function MemberProgram() {
           )}
         </div>
       </div>
+
+      {/* Find a Coach modal */}
+      {showFindCoach && (
+        <div
+          onClick={() => setShowFindCoach(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+            backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', zIndex: 1000, padding: '20px',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: '18px', maxWidth: '560px', width: '100%',
+              maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+              boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
+            }}
+          >
+            <div style={{
+              padding: '16px 20px', borderBottom: '1px solid var(--border)',
+              background: 'var(--surface-2)', borderRadius: '18px 18px 0 0',
+            }}>
+              <h3 style={{ fontSize: '17px', fontWeight: 700, margin: 0, color: 'var(--text)' }}>
+                Find a Coach
+              </h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-3)', margin: '2px 0 0' }}>
+                Browse available coaches and choose one
+              </p>
+            </div>
+
+            <div style={{ padding: '24px', overflowY: 'auto', flex: 1 }}>
+              <div style={{ position: 'relative', marginBottom: '14px' }}>
+                <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-3)' }} />
+                <input
+                  type="text"
+                  placeholder="Search coaches..."
+                  value={searchCoach}
+                  onChange={(e) => setSearchCoach(e.target.value)}
+                  style={{
+                    width: '100%', padding: '10px 14px 10px 40px', borderRadius: '10px',
+                    border: '1px solid var(--border)', background: 'var(--surface-2)',
+                    color: 'var(--text)', fontSize: '13px', boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              {coaches.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                  <UserCircle size={32} color="var(--text-3)" style={{ margin: '0 auto 10px', opacity: 0.4 }} />
+                  <p style={{ fontSize: '14px', color: 'var(--text-2)' }}>No coaches available</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '400px', overflowY: 'auto' }}>
+                  {filteredCoaches.map((coach) => {
+                    const coachId = Number(coach.id)
+                    const currentCoachId = Number(assignedCoach?.id)
+                    const isApproved = coachStatus === 'approved' && currentCoachId === coachId
+                    const isPending = coachStatus === 'pending' && currentCoachId === coachId
+
+                    return (
+                      <div
+                        key={coach.id}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '14px 16px', borderRadius: '10px',
+                          background: isApproved ? 'var(--green)0D' : isPending ? 'var(--blue)0D' : 'var(--surface-2)',
+                          border: `1px solid ${isApproved ? 'var(--green)33' : isPending ? 'var(--blue)33' : 'var(--border)'}`,
+                          flexWrap: 'wrap', gap: '8px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: 1 }}>
+                          <div style={{
+                            width: '40px', height: '40px', borderRadius: '50%',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontWeight: 700, fontSize: '16px', flexShrink: 0,
+                            background: isApproved ? 'var(--green)1A' : isPending ? 'var(--blue)1A' : 'var(--accent)1A',
+                            color: isApproved ? 'var(--green)' : isPending ? 'var(--blue)' : 'var(--accent)',
+                          }}>
+                            {coach.name.charAt(0)}
+                          </div>
+                          <div style={{ flex: 1, minWidth: '120px' }}>
+                            <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)', margin: 0 }}>
+                              {coach.name}
+                            </p>
+                            <p style={{ fontSize: '12px', color: 'var(--text-3)', margin: 0 }}>
+                              {coach.specialty || 'General Fitness'}
+                            </p>
+                            {coach.rating && (
+                              <p style={{ fontSize: '11px', color: 'var(--amber)', display: 'flex', alignItems: 'center', gap: '4px', margin: 0 }}>
+                                <Star size={12} fill="var(--amber)" />
+                                {coach.rating} • {coach.client_count || 0} clients
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {isApproved ? (
+                          <span style={{
+                            padding: '4px 12px', borderRadius: '6px', background: 'var(--green)1A',
+                            color: 'var(--green)', fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap',
+                          }}>
+                            Your Coach
+                          </span>
+                        ) : isPending ? (
+                          <span style={{
+                            padding: '4px 12px', borderRadius: '6px', background: 'var(--blue)1A',
+                            color: 'var(--blue)', fontSize: '11px', fontWeight: 700,
+                            display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap',
+                          }}>
+                            <Clock size={12} /> Pending
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => showConfirm('assignCoach', coach.id)}
+                            disabled={submitting}
+                            style={{
+                              padding: '6px 16px', borderRadius: '8px', border: 'none',
+                              background: 'var(--accent)', color: '#FFFFFF', fontSize: '12px',
+                              fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer',
+                              opacity: submitting ? 0.6 : 1,
+                            }}
+                          >
+                            Assign
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div style={{
+              padding: '16px 24px', borderTop: '1px solid var(--border)',
+              background: 'var(--surface-2)', display: 'flex', gap: '12px',
+              borderRadius: '0 0 18px 18px', flexShrink: 0,
+            }}>
+              <button
+                onClick={() => setShowFindCoach(false)}
+                style={{
+                  flex: 1, padding: '10px 20px', borderRadius: '10px',
+                  border: '1px solid var(--border)', background: 'transparent',
+                  color: 'var(--text-2)', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm assign modal */}
+      {showConfirmModal && (
+        <div
+          onClick={() => setShowConfirmModal(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)',
+            backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', zIndex: 1001, padding: '20px',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: '18px', maxWidth: '420px', width: '100%',
+              textAlign: 'center', boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
+            }}
+          >
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{
+                width: '56px', height: '56px', borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 16px', background: 'var(--amber)1A', color: 'var(--amber)',
+              }}>
+                <AlertCircle size={28} />
+              </div>
+
+              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text)', marginBottom: '8px' }}>
+                Assign Yourself to This Coach?
+              </h3>
+
+              <p style={{ fontSize: '14px', color: 'var(--text-2)', lineHeight: 1.6, marginBottom: '20px' }}>
+                Are you sure you want to assign yourself to <strong>{coaches.find(c => c.id === confirmData)?.name}</strong>?
+                The coach will need to approve your request before you can book sessions.
+              </p>
+
+              <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  style={{
+                    flex: 1, padding: '10px 20px', borderRadius: '10px',
+                    border: '1px solid var(--border)', background: 'transparent',
+                    color: 'var(--text-2)', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirm}
+                  disabled={submitting}
+                  style={{
+                    flex: 1, padding: '10px 20px', borderRadius: '10px', border: 'none',
+                    background: 'var(--accent)', color: '#FFFFFF', fontSize: '13px',
+                    fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer',
+                    opacity: submitting ? 0.6 : 1,
+                  }}
+                >
+                  Assign
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
     )
   }
 

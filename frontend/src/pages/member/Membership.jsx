@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import api from '../../api/client'
-import { Crown, Calendar, CheckCircle, Clock, Star, Loader2 } from 'lucide-react'
+import { Crown, Calendar, CheckCircle, Clock, Star, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 function DaysLeftRing({ daysLeft, totalDays = 30 }) {
@@ -34,6 +34,10 @@ export default function MemberMembership() {
   const [loading, setLoading] = useState(true)
   const [memberData, setMemberData] = useState(null)
   const [subscriptions, setSubscriptions] = useState([])
+  const [plans, setPlans] = useState([])
+  const [plansLoading, setPlansLoading] = useState(true)
+  const [plansPage, setPlansPage] = useState(0)
+  const PLANS_PER_PAGE = 4
 
   useEffect(() => { fetchData() }, [])
 
@@ -44,7 +48,7 @@ export default function MemberMembership() {
       const memberRes = await api.get('/members/my')
       console.log('Member Data:', memberRes.data)
       setMemberData(memberRes.data)
-      
+
       // Fetch subscriptions - ✅ FIXED with better error handling
       try {
         const subsRes = await api.get('/subscriptions/my')
@@ -56,12 +60,28 @@ export default function MemberMembership() {
         setSubscriptions([])
         // Don't show error toast for missing subscriptions
       }
-      
+
     } catch (error) {
       console.error('Error fetching membership data:', error)
       toast.error('Failed to load membership')
     } finally {
       setLoading(false)
+    }
+
+    // Fetch the gym's real plans (previously this was a hardcoded array that
+    // didn't reflect what the admin actually configured - fetch it for real)
+    setPlansLoading(true)
+    try {
+      const plansRes = await api.get('/plans')
+      console.log('Plans:', plansRes.data)
+      setPlans(plansRes.data || [])
+      setPlansPage(0)
+    } catch (plansError) {
+      console.error('Error fetching plans:', plansError)
+      toast.error('Failed to load plans')
+      setPlans([])
+    } finally {
+      setPlansLoading(false)
     }
   }
 
@@ -72,22 +92,33 @@ export default function MemberMembership() {
 
   const membership = memberData?.membership
   const isActive = membership !== null && membership !== undefined
-  
+
+  const currentPlanId = membership?.plan?.id ?? null
   const planName = membership?.plan?.name || null
   const planPrice = membership?.plan?.price || 0
   const planDescription = membership?.plan?.description || 'Full access to all facilities'
   const planDuration = membership?.plan?.duration_days || 30
   const startDate = membership?.start_date || null
   const endDate = membership?.end_date || null
-  
+
   let daysLeft = 0
   if (endDate) {
     const end = new Date(endDate)
     const now = new Date()
     daysLeft = Math.ceil((end - now) / (1000 * 60 * 60 * 24))
   }
-  
+
   const actuallyActive = isActive && daysLeft > 0
+
+  const totalPlansPages = Math.max(1, Math.ceil(plans.length / PLANS_PER_PAGE))
+  const safePlansPage = Math.min(plansPage, totalPlansPages - 1)
+  const paginatedPlans = plans.slice(
+    safePlansPage * PLANS_PER_PAGE,
+    safePlansPage * PLANS_PER_PAGE + PLANS_PER_PAGE
+  )
+  const goToPlansPage = (page) => {
+    setPlansPage(Math.max(0, Math.min(page, totalPlansPages - 1)))
+  }
 
   if (loading) {
     return (
@@ -345,126 +376,221 @@ export default function MemberMembership() {
           </h3>
         </div>
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-          gap: '14px',
-        }}>
-          {[
-            { id: 1, name: 'Monthly Basic', price: 3500, duration_days: 30, description: 'Basic gym access' },
-            { id: 2, name: 'Monthly Premium', price: 5500, duration_days: 30, description: 'Full gym access + classes' },
-            { id: 3, name: 'Quarterly', price: 14000, duration_days: 90, description: '3 months premium access' },
-            { id: 4, name: 'Yearly', price: 48000, duration_days: 365, description: 'Full year access' },
-          ].map((plan) => {
-            const isCurrent = planName === plan.name && actuallyActive
-            return (
-              <div key={plan.id} style={{
-                padding: '20px',
-                borderRadius: '14px',
-                background: isCurrent
-                  ? 'linear-gradient(135deg, var(--green)22 0%, var(--green)0A 100%)'
-                  : 'var(--surface-2)',
-                border: `${isCurrent ? '2px' : '1px'} solid ${isCurrent ? 'var(--green)' : 'var(--border)'}`,
-                boxShadow: isCurrent ? '0 0 24px var(--green)22, inset 0 1px 0 var(--green)33' : 'none',
-                position: 'relative',
-                transition: 'all 0.2s',
-              }}>
-                <div style={{
+        {plansLoading ? (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px',
+            padding: '30px 0',
+            color: 'var(--text-3)',
+            fontSize: '13px',
+          }}>
+            <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+            Loading plans…
+          </div>
+        ) : plans.length === 0 ? (
+          <p style={{ fontSize: '13px', color: 'var(--text-3)', textAlign: 'center', padding: '20px 0' }}>
+            No plans are available right now. Check back soon or contact the gym admin.
+          </p>
+        ) : (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '14px',
+          }}>
+            {paginatedPlans.map((plan) => {
+              const isCurrent = actuallyActive && currentPlanId === plan.id
+              return (
+                <div key={plan.id} style={{
+                  padding: '20px',
+                  borderRadius: '14px',
+                  background: isCurrent
+                    ? 'linear-gradient(135deg, var(--green)22 0%, var(--green)0A 100%)'
+                    : 'var(--surface-2)',
+                  border: `${isCurrent ? '2px' : '1px'} solid ${isCurrent ? 'var(--green)' : 'var(--border)'}`,
+                  boxShadow: isCurrent ? '0 0 24px var(--green)22, inset 0 1px 0 var(--green)33' : 'none',
+                  position: 'relative',
+                  transition: 'all 0.2s',
                   display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  marginBottom: '12px',
+                  flexDirection: 'column',
+                  height: '100%',
                 }}>
-                  <h4 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--text)' }}>
-                    {plan.name}
-                  </h4>
-                  {isCurrent && (
-                    <span style={{
-                      fontSize: '10px',
-                      fontWeight: 800,
-                      padding: '4px 10px',
-                      borderRadius: '6px',
-                      background: 'var(--green)',
-                      color: '#fff',
-                      letterSpacing: '0.04em',
-                      textTransform: 'uppercase',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                    }}>
-                      <CheckCircle size={10} /> Active
-                    </span>
-                  )}
-                </div>
-                <div style={{ marginBottom: '4px' }}>
-                  <span style={{
-                    fontSize: '22px',
-                    fontWeight: 800,
-                    color: 'var(--accent)',
-                    letterSpacing: '-0.02em',
-                  }}>
-                    {plan.price.toLocaleString()}
-                  </span>
-                  <span style={{
-                    fontSize: '13px',
-                    color: 'var(--text-3)',
-                    marginLeft: '5px',
-                  }}>
-                    DZD
-                  </span>
-                </div>
-                <p style={{
-                  fontSize: '12px',
-                  color: 'var(--text-3)',
-                  marginBottom: '12px',
-                }}>
-                  / {plan.duration_days} days
-                </p>
-                <p style={{
-                  fontSize: '12px',
-                  color: 'var(--text-2)',
-                  marginBottom: '14px',
-                  lineHeight: 1.5,
-                }}>
-                  {plan.description}
-                </p>
-                {!isCurrent ? (
-                  <button
-                    onClick={() => toast('Contact admin to change your plan.', { icon: 'ℹ️' })}
-                    style={{
-                      width: '100%',
-                      padding: '10px',
-                      borderRadius: '8px',
-                      border: 'none',
-                      background: 'var(--accent)',
-                      color: 'var(--bg)',
-                      fontSize: '12.5px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      transition: 'opacity 0.2s',
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.opacity = '0.85'}
-                    onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
-                  >
-                    Select {plan.name}
-                  </button>
-                ) : (
                   <div style={{
                     display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    color: 'var(--green)',
-                    fontSize: '12px',
-                    fontWeight: 700,
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    marginBottom: '12px',
                   }}>
-                    <CheckCircle size={14} />
-                    Currently active
+                    <h4 style={{ fontSize: '15px', fontWeight: 700, margin: 0, color: 'var(--text)' }}>
+                      {plan.name}
+                    </h4>
+                    {isCurrent && (
+                      <span style={{
+                        fontSize: '10px',
+                        fontWeight: 800,
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        background: 'var(--green)',
+                        color: '#fff',
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}>
+                        <CheckCircle size={10} /> Active
+                      </span>
+                    )}
                   </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
+                  <div style={{ marginBottom: '4px' }}>
+                    <span style={{
+                      fontSize: '22px',
+                      fontWeight: 800,
+                      color: 'var(--accent)',
+                      letterSpacing: '-0.02em',
+                    }}>
+                      {plan.price.toLocaleString()}
+                    </span>
+                    <span style={{
+                      fontSize: '13px',
+                      color: 'var(--text-3)',
+                      marginLeft: '5px',
+                    }}>
+                      DZD
+                    </span>
+                  </div>
+                  <p style={{
+                    fontSize: '12px',
+                    color: 'var(--text-3)',
+                    marginBottom: '12px',
+                  }}>
+                    / {plan.duration_days} days
+                  </p>
+                  <p style={{
+                    fontSize: '12px',
+                    color: 'var(--text-2)',
+                    marginBottom: '14px',
+                    lineHeight: 1.5,
+                    height: '36px',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  }}>
+                    {plan.description || 'Full access to gym facilities'}
+                  </p>
+                  {!isCurrent ? (
+                    <button
+                      onClick={() => toast('Contact admin to change your plan.', { icon: 'ℹ️' })}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: 'var(--accent)',
+                        color: 'var(--bg)',
+                        fontSize: '12.5px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'opacity 0.2s',
+                        marginTop: 'auto',
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.opacity = '0.85'}
+                      onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                    >
+                      Select {plan.name}
+                    </button>
+                  ) : (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      color: 'var(--green)',
+                      fontSize: '12px',
+                      fontWeight: 700,
+                      marginTop: 'auto',
+                    }}>
+                      <CheckCircle size={14} />
+                      Currently active
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {!plansLoading && plans.length > PLANS_PER_PAGE && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '14px',
+            marginTop: '20px',
+            paddingTop: '18px',
+            borderTop: `1px solid var(--border)`,
+          }}>
+            <button
+              onClick={() => goToPlansPage(safePlansPage - 1)}
+              disabled={safePlansPage === 0}
+              style={{
+                width: '34px',
+                height: '34px',
+                borderRadius: '9px',
+                border: `1px solid var(--border)`,
+                background: 'var(--surface-2)',
+                color: safePlansPage === 0 ? 'var(--text-3)' : 'var(--text)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: safePlansPage === 0 ? 'not-allowed' : 'pointer',
+                opacity: safePlansPage === 0 ? 0.5 : 1,
+              }}
+            >
+              <ChevronLeft size={16} />
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {Array.from({ length: totalPlansPages }).map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => goToPlansPage(i)}
+                  style={{
+                    width: safePlansPage === i ? '20px' : '7px',
+                    height: '7px',
+                    borderRadius: '99px',
+                    border: 'none',
+                    background: safePlansPage === i ? 'var(--accent)' : 'var(--border)',
+                    cursor: 'pointer',
+                    padding: 0,
+                    transition: 'all 0.2s',
+                  }}
+                />
+              ))}
+            </div>
+
+            <button
+              onClick={() => goToPlansPage(safePlansPage + 1)}
+              disabled={safePlansPage === totalPlansPages - 1}
+              style={{
+                width: '34px',
+                height: '34px',
+                borderRadius: '9px',
+                border: `1px solid var(--border)`,
+                background: 'var(--surface-2)',
+                color: safePlansPage === totalPlansPages - 1 ? 'var(--text-3)' : 'var(--text)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: safePlansPage === totalPlansPages - 1 ? 'not-allowed' : 'pointer',
+                opacity: safePlansPage === totalPlansPages - 1 ? 0.5 : 1,
+              }}
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

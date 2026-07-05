@@ -54,7 +54,8 @@ def _plan_out(plan):
         name=plan.name,
         price=plan.price,
         duration_days=plan.duration_days,
-        description=plan.description
+        description=plan.description,
+        created_at=plan.created_at
     )
 
 
@@ -100,7 +101,8 @@ def get_subscriptions(
                 name=plan.name if plan else "Unknown Plan",
                 price=plan.price if plan else 0,
                 duration_days=plan.duration_days if plan else 0,
-                description=plan.description if plan else None
+                description=plan.description if plan else None,
+                created_at=plan.created_at if plan else sub.created_at
             ) if plan else None,
             member=MemberOut(
                 id=member.id,
@@ -564,7 +566,8 @@ def get_plans(
         name=plan.name,
         price=plan.price,
         duration_days=plan.duration_days,
-        description=plan.description
+        description=plan.description,
+        created_at=plan.created_at
     ) for plan in plans]
 
 
@@ -588,7 +591,8 @@ def get_plan(
         name=plan.name,
         price=plan.price,
         duration_days=plan.duration_days,
-        description=plan.description
+        description=plan.description,
+        created_at=plan.created_at
     )
 
 
@@ -616,7 +620,8 @@ def create_plan(
         name=plan.name,
         price=plan.price,
         duration_days=plan.duration_days,
-        description=plan.description
+        description=plan.description,
+        created_at=plan.created_at
     )
 
 
@@ -654,7 +659,8 @@ def update_plan(
         name=plan.name,
         price=plan.price,
         duration_days=plan.duration_days,
-        description=plan.description
+        description=plan.description,
+        created_at=plan.created_at
     )
 
 

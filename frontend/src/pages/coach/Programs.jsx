@@ -4,7 +4,8 @@ import { useAuthStore } from '../../stores/authStore'
 import {
   Dumbbell, Plus, Search, Users, Edit2, Copy, Trash2, X,
   Loader2, Calendar, Clock, BarChart3, ChevronRight, Target,
-  TrendingUp, MoreHorizontal, Layers, Zap, ArrowUpRight, CalendarDays
+  TrendingUp, MoreHorizontal, Layers, Zap, ArrowUpRight, CalendarDays,
+  AlertTriangle
 } from 'lucide-react'
 import api from '../../api/client'
 import toast from 'react-hot-toast'
@@ -22,6 +23,7 @@ export default function CoachPrograms() {
   const [submitting, setSubmitting] = useState(false)
   const [builderProgram, setBuilderProgram] = useState(null)
   const [openMenu, setOpenMenu] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [page, setPage] = useState(1)
   const PER_PAGE = 6
 
@@ -105,15 +107,23 @@ export default function CoachPrograms() {
     } finally { setSubmitting(false) }
   }
 
-  const handleDelete = async (id, e) => {
+  const handleDelete = (id, name, e) => {
     e?.stopPropagation()
     setOpenMenu(null)
-    if (!confirm('Delete this program?')) return
+    setDeleteTarget({ id, name })
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
     try {
-      await api.delete(`/programs/coach/${id}`)
+      await api.delete(`/programs/coach/${deleteTarget.id}`)
       toast.success('Deleted')
       fetchPrograms()
-    } catch { toast.error('Failed') }
+    } catch {
+      toast.error('Failed')
+    } finally {
+      setDeleteTarget(null)
+    }
   }
 
   const handleDuplicate = async (prog, e) => {
@@ -235,7 +245,32 @@ export default function CoachPrograms() {
           margin-bottom: 6px;
         }
 
-        /* ── Buttons ── */
+        .btn-primary {
+          padding: 10px 22px;
+          border-radius: 10px;
+          border: none !important;
+          background: #C56A2A !important;
+          color: #FFFFFF !important;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-family: inherit;
+        }
+        .btn-primary:hover:not(:disabled) {
+          opacity: 0.85 !important;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 14px rgba(255,90,31,0.35);
+        }
+        .btn-primary:disabled {
+          opacity: 0.5 !important;
+          cursor: not-allowed;
+          transform: none !important;
+        }
+
         .btn-cta {
           display: inline-flex;
           align-items: center;
@@ -993,8 +1028,13 @@ export default function CoachPrograms() {
           <div style={{ fontSize: 13, marginBottom: 20, maxWidth: 280, lineHeight: 1.6 }}>
             Get started by creating your first program to begin structuring your training plans.
           </div>
-          <button className="btn-cta" onClick={() => setShowCreateModal(true)} style={{ margin: '0 auto' }}>
-            <Plus size={14} /> Create program
+          <button
+            className="btn-primary"
+            onClick={() => setShowCreateModal(true)}
+            style={{ margin: '0 auto' }}
+          >
+
+            Create program
           </button>
         </div>
       ) : filtered.length === 0 ? (
@@ -1105,7 +1145,7 @@ export default function CoachPrograms() {
                               <Copy size={13} /> Duplicate
                             </button>
                             <div className="dropdown-divider" />
-                            <button className="dropdown-item red" onClick={e => handleDelete(prog.id, e)}>
+                            <button className="dropdown-item red" onClick={e => handleDelete(prog.id, prog.name, e)}>
                               <Trash2 size={13} /> Delete
                             </button>
                           </div>
@@ -1230,6 +1270,92 @@ export default function CoachPrograms() {
               <button className="btn-ghost" onClick={() => setShowCreateModal(false)}>
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── DELETE CONFIRMATION MODAL ─── */}
+      {deleteTarget && (
+        <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 400 }}>
+            <div
+              style={{
+                padding: '12px 8px 4px',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+              }}
+            >
+              <div
+                style={{
+                  width: '72px',
+                  height: '72px',
+                  borderRadius: '50%',
+                  background: 'rgba(249, 115, 22, 0.10)',
+                  border: '1px solid rgba(249, 115, 22, 0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '22px',
+                }}
+              >
+                <AlertTriangle size={30} color="var(--accent)" strokeWidth={2} />
+              </div>
+
+              <h3
+                style={{
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  color: 'var(--text)',
+                  margin: '0 0 10px',
+                }}
+              >
+                Delete Program
+              </h3>
+
+              <p
+                style={{
+                  fontSize: '14px',
+                  color: 'var(--text-3)',
+                  lineHeight: 1.6,
+                  maxWidth: '320px',
+                  margin: '0 auto 28px',
+                }}
+              >
+                Are you sure you want to delete{' '}
+                <span style={{ color: 'var(--text)', fontWeight: 600 }}>
+                  {deleteTarget?.name || 'this program'}
+                </span>
+                ? This cannot be undone.
+              </p>
+
+              <div
+                style={{
+                  width: '100%',
+                  borderTop: '1px solid var(--border)',
+                  paddingTop: '20px',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  gap: '12px',
+                }}
+              >
+                <button
+                  onClick={() => setDeleteTarget(null)}
+                  className="btn-ghost"
+                  style={{ flex: '0 1 140px' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="btn-cta"
+                  style={{ flex: '0 1 140px', justifyContent: 'center' }}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         </div>

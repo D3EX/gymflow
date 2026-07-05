@@ -265,6 +265,24 @@ export default function Register() {
         .fade-in { animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
         .float { animation: float 4s ease-in-out infinite; }
 
+        .gym-list-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(197,106,42,0.35) transparent;
+        }
+        .gym-list-scroll::-webkit-scrollbar {
+          width: 5px;
+        }
+        .gym-list-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .gym-list-scroll::-webkit-scrollbar-thumb {
+          background: rgba(197,106,42,0.35);
+          border-radius: 99px;
+        }
+        .gym-list-scroll::-webkit-scrollbar-thumb:hover {
+          background: rgba(197,106,42,0.55);
+        }
+
         .login-bg::before {
           content: '';
           position: fixed;
@@ -360,6 +378,12 @@ export default function Register() {
 
           border: none;
           background-clip: padding-box;
+
+          /* Pins the OR / social / sign-in footer to the bottom of the
+             card regardless of how tall the current step's content is
+             (e.g. the short "pick a gym" step vs the longer form steps). */
+          display: flex;
+          flex-direction: column;
 
 /* ── Bottom dissolve into page background #14110F ── */
 -webkit-mask-image: linear-gradient(
@@ -1472,22 +1496,35 @@ mask-image: linear-gradient(
               type="button"
               onClick={goToGymPicker}
               style={{
-                display: 'flex', alignItems: 'center', gap: '8px',
-                padding: '8px 14px', marginBottom: '14px',
+                display: 'flex', alignItems: 'center', gap: '10px',
+                padding: '8px 10px', marginBottom: '16px',
                 borderRadius: '999px', width: '100%',
-                background: 'rgba(197,106,42,0.08)',
-                border: '1px solid rgba(197,106,42,0.20)',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.30), inset 0 -1px 0 rgba(255, 255, 255, 0.03), 0 1px 0 rgba(255, 255, 255, 0.05)',
                 cursor: 'pointer',
-                transition: 'background 0.2s ease, border-color 0.2s ease',
+                boxSizing: 'border-box',
+                transition: 'background 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(197,106,42,0.14)'; e.currentTarget.style.borderColor = 'rgba(197,106,42,0.32)' }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(197,106,42,0.08)'; e.currentTarget.style.borderColor = 'rgba(197,106,42,0.20)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.07)'; e.currentTarget.style.borderColor = 'rgba(140, 67, 19, 0.35)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)' }}
             >
-              <Building2 size={13} color="#C56A2A" style={{ flexShrink: 0 }} />
-              <span style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.65)', flex: 1, textAlign: 'left' }}>
+              <span style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
+                background: 'rgba(197,106,42,0.12)',
+                border: '1px solid rgba(197,106,42,0.25)',
+              }}>
+                <Building2 size={13} color="#E8844A" />
+              </span>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.55)', flex: 1, textAlign: 'left' }}>
                 Joining <span style={{ color: '#E8844A' }}>{gymName}</span>
               </span>
-              <span style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.03em' }}>
+              <span style={{
+                fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.60)',
+                letterSpacing: '0.03em', padding: '6px 12px', borderRadius: '999px',
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+              }}>
                 Change
               </span>
             </button>
@@ -1529,6 +1566,7 @@ mask-image: linear-gradient(
             </div>
           </div>
 
+          <div style={{ flex: 1 }}>
           {step === null ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 0', gap: '12px' }}>
               <div style={{
@@ -1552,7 +1590,7 @@ mask-image: linear-gradient(
                   autoFocus
                 />
               </div>
-              <div style={{ maxHeight: '260px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div className="gym-list-scroll" style={{ maxHeight: '160px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {gymResolving ? (
                   <div style={{ textAlign: 'center', padding: '24px', color: 'rgba(255,255,255,0.35)', fontSize: '12px' }}>
                     Loading gyms…
@@ -1809,7 +1847,10 @@ mask-image: linear-gradient(
             </div>
           </form>
           )}
+          </div>
 
+          {step === 0 && (
+          <>
           {/* Divider */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '14px 0 12px' }}>
             <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.06)' }} />
@@ -1831,6 +1872,8 @@ mask-image: linear-gradient(
               Apple
             </button>
           </div>
+          </>
+          )}
 
           {/* Sign in link */}
           <div style={{ marginTop: '12px', textAlign: 'center', fontSize: '12px', color: 'rgba(255,255,255,0.35)' }}>
