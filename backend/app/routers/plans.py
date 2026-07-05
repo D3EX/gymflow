@@ -14,8 +14,12 @@ def get_plans(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all plans for the current user's gym"""
-    plans = db.query(Plan).filter(Plan.gym_id == current_user.gym_id).order_by(Plan.price).all()
+    """Get plans: super_admin sees global platform plans (gym_id IS NULL);
+    everyone else sees only their own gym's plans."""
+    if current_user.role == "super_admin":
+        plans = db.query(Plan).filter(Plan.gym_id.is_(None)).order_by(Plan.price).all()
+    else:
+        plans = db.query(Plan).filter(Plan.gym_id == current_user.gym_id).order_by(Plan.price).all()
     return plans
 
 @router.post("/", response_model=PlanOut)
@@ -24,8 +28,10 @@ def create_plan(
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin)
 ):
-    """Create a new plan for the admin's gym"""
-    plan = Plan(**data.dict(), gym_id=admin.gym_id)
+    """Create a new plan. Super admins create global platform plans
+    (gym_id=NULL); regular admins create plans scoped to their own gym."""
+    plan_gym_id = None if admin.role == "super_admin" else admin.gym_id
+    plan = Plan(**data.dict(), gym_id=plan_gym_id)
     db.add(plan)
     db.commit()
     db.refresh(plan)
@@ -40,14 +46,18 @@ def update_plan(
 ):
     print("🔥 RAW INCOMING DATA:", data.dict())          # ADD THIS
 
-    plan = db.query(Plan).filter(
-        Plan.id == plan_id,
-        Plan.gym_id == admin.gym_id
-    ).first()
+    if admin.role == "super_admin":
+        plan = db.query(Plan).filter(
+            Plan.id == plan_id,
+            Plan.gym_id.is_(None)
+        ).first()
+    else:
+        plan = db.query(Plan).filter(
+            Plan.id == plan_id,
+            Plan.gym_id == admin.gym_id
+        ).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
-
-    for key, value in data.dict(exclude_unset=True).items():
         setattr(plan, key, value)
 
     print("🔥 PLAN FEATURES BEFORE COMMIT:", plan.features)   # ADD THIS
@@ -63,11 +73,17 @@ def delete_plan(
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin)
 ):
-    """Delete a plan (must belong to admin's gym)"""
-    plan = db.query(Plan).filter(
-        Plan.id == plan_id,
-        Plan.gym_id == admin.gym_id
-    ).first()
+    """Delete a plan (must belong to admin's gym, or be a global plan for super_admin)"""
+    if admin.role == "super_admin":
+        plan = db.query(Plan).filter(
+            Plan.id == plan_id,
+            Plan.gym_id.is_(None)
+        ).first()
+    else:
+        plan = db.query(Plan).filter(
+            Plan.id == plan_id,
+            Plan.gym_id == admin.gym_id
+        ).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
     

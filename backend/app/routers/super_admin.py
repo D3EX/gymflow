@@ -7,12 +7,125 @@ from typing import List, Optional
 from datetime import datetime
 
 from ..database import get_db
-from ..models.models import Gym, User, Member, Staff
+from ..models.models import Gym, User, Member, Staff, SubscriptionTier
 from ..utils.auth import require_super_admin, hash_password
-from ..tiers import SUBSCRIPTION_TIERS, get_tier_limits, DEFAULT_TIER
+from ..tiers import (
+    DEFAULT_TIERS_SEED,
+    DEFAULT_TIER,
+    ensure_tiers_seeded,
+    get_tier_by_key,
+    get_tier_limits,
+)
 
 router = APIRouter(prefix="/api/super-admin", tags=["Super Admin"])
 
+
+# ============================================================
+# GYM SUBSCRIPTION TIERS (super admin's plans FOR gyms)
+#
+# Not to be confused with the `plans` table / `/api/plans` routes,
+# which are the membership plans a gym sells to its OWN members.
+# The two never share a table and should never be joined.
+# ============================================================
+
+class TierCreate(BaseModel):
+    key: str
+    name: str
+    price: Optional[float] = None
+    max_coaches: int
+    max_members: int
+    features: List[str] = []
+
+
+class TierUpdate(BaseModel):
+    name: Optional[str] = None
+    price: Optional[float] = None
+    max_coaches: Optional[int] = None
+    max_members: Optional[int] = None
+    features: Optional[List[str]] = None
+    is_active: Optional[bool] = None
+
+
+def _tier_out(tier: SubscriptionTier) -> dict:
+    return {
+        "id": tier.id,
+        "key": tier.key,
+        "name": tier.name,
+        "price": tier.price,
+        "max_coaches": tier.max_coaches,
+        "max_members": tier.max_members,
+        "features": tier.features or [],
+        "is_active": tier.is_active,
+    }
+
+
+@router.get("/tiers")
+def list_tiers(db: Session = Depends(get_db), _admin=Depends(require_super_admin)):
+    """List all gym subscription tiers (super admin's plans for gyms)."""
+    ensure_tiers_seeded(db)
+    tiers = db.query(SubscriptionTier).order_by(SubscriptionTier.id.asc()).all()
+    return [_tier_out(t) for t in tiers]
+
+
+@router.post("/tiers")
+def create_tier(data: TierCreate, db: Session = Depends(get_db), _admin=Depends(require_super_admin)):
+    if get_tier_by_key(db, data.key):
+        raise HTTPException(status_code=400, detail="A tier with this key already exists")
+
+    tier = SubscriptionTier(
+        key=data.key,
+        name=data.name,
+        price=data.price,
+        max_coaches=data.max_coaches,
+        max_members=data.max_members,
+        features=data.features,
+    )
+    db.add(tier)
+    db.commit()
+    db.refresh(tier)
+    return _tier_out(tier)
+
+
+@router.put("/tiers/{tier_id}")
+def update_tier(
+    tier_id: int,
+    data: TierUpdate,
+    db: Session = Depends(get_db),
+    _admin=Depends(require_super_admin),
+):
+    tier = db.query(SubscriptionTier).filter(SubscriptionTier.id == tier_id).first()
+    if not tier:
+        raise HTTPException(status_code=404, detail="Tier not found")
+
+    for field, value in data.dict(exclude_unset=True).items():
+        setattr(tier, field, value)
+
+    db.commit()
+    db.refresh(tier)
+    return _tier_out(tier)
+
+
+@router.delete("/tiers/{tier_id}")
+def delete_tier(tier_id: int, db: Session = Depends(get_db), _admin=Depends(require_super_admin)):
+    tier = db.query(SubscriptionTier).filter(SubscriptionTier.id == tier_id).first()
+    if not tier:
+        raise HTTPException(status_code=404, detail="Tier not found")
+
+    gyms_using_tier = db.query(Gym).filter(Gym.subscription_tier == tier.key).count()
+    if gyms_using_tier > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete: {gyms_using_tier} gym(s) are currently on this tier",
+        )
+
+    db.delete(tier)
+    db.commit()
+    return {"message": "Tier deleted"}
+
+
+# ============================================================
+# GYMS
+# ============================================================
 
 class GymCreate(BaseModel):
     name: str
@@ -32,7 +145,7 @@ def list_gyms(db: Session = Depends(get_db), _admin=Depends(require_super_admin)
     gyms = db.query(Gym).order_by(Gym.created_at.desc()).all()
     result = []
     for gym in gyms:
-        limits = get_tier_limits(gym.subscription_tier)
+        limits = get_tier_limits(db, gym.subscription_tier)
 
         coach_count = (
             db.query(Staff)
@@ -60,16 +173,11 @@ def list_gyms(db: Session = Depends(get_db), _admin=Depends(require_super_admin)
     return result
 
 
-@router.get("/tiers")
-def list_tiers(_admin=Depends(require_super_admin)):
-    """Return the hardcoded tier definitions (for a dropdown in the super admin UI)."""
-    return SUBSCRIPTION_TIERS
-
-
 @router.post("/gyms")
 def create_gym(data: GymCreate, db: Session = Depends(get_db), _admin=Depends(require_super_admin)):
     """Create a new gym + its owner (admin) account in one step."""
-    if data.subscription_tier not in SUBSCRIPTION_TIERS:
+    ensure_tiers_seeded(db)
+    if not get_tier_by_key(db, data.subscription_tier):
         raise HTTPException(status_code=400, detail="Invalid subscription tier")
 
     if db.query(User).filter(User.email == data.owner_email).first():
@@ -105,7 +213,7 @@ def update_gym_tier(
     db: Session = Depends(get_db),
     _admin=Depends(require_super_admin),
 ):
-    if data.subscription_tier not in SUBSCRIPTION_TIERS:
+    if not get_tier_by_key(db, data.subscription_tier):
         raise HTTPException(status_code=400, detail="Invalid subscription tier")
 
     gym = db.query(Gym).filter(Gym.id == gym_id).first()

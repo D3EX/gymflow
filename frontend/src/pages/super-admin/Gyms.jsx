@@ -240,6 +240,7 @@ function GymRow({ gym, onEdit, onSuspend, onActivate, onViewDetails }) {
 
 /* ─── Create Gym Modal ──────────────────────────────────────── */
 function CreateGymModal({ isOpen, onClose, onSubmit, tiers, submitting }) {
+  // tiers is an array: [{ key, name, price, max_coaches, max_members, ... }]
   const [formData, setFormData] = useState({
     name: '',
     owner_name: '',
@@ -307,9 +308,9 @@ function CreateGymModal({ isOpen, onClose, onSubmit, tiers, submitting }) {
               className="form-input"
               required
             >
-              {Object.keys(tiers).map(key => (
-                <option key={key} value={key}>
-                  {key.charAt(0).toUpperCase() + key.slice(1)}
+              {tiers.map(t => (
+                <option key={t.key} value={t.key}>
+                  {t.name}
                 </option>
               ))}
             </select>
@@ -363,9 +364,9 @@ function EditGymModal({ isOpen, onClose, onSubmit, gym, tiers, submitting }) {
             className="form-input"
             required
           >
-            {Object.keys(tiers).map(key => (
-              <option key={key} value={key}>
-                {key.charAt(0).toUpperCase() + key.slice(1)}
+            {tiers.map(t => (
+              <option key={t.key} value={t.key}>
+                {t.name}
               </option>
             ))}
           </select>
@@ -388,7 +389,7 @@ function EditGymModal({ isOpen, onClose, onSubmit, gym, tiers, submitting }) {
 ═══════════════════════════════════════════════════════════════ */
 export default function Gyms() {
   const [gyms, setGyms] = useState([])
-  const [tiers, setTiers] = useState({})
+  const [tiers, setTiers] = useState([]) // [{ key, name, price, max_coaches, max_members, ... }]
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all') // all | active | suspended
@@ -482,7 +483,7 @@ export default function Gyms() {
   const suspendedGyms = gyms.filter(g => !g.is_active).length
   const totalMembers = gyms.reduce((sum, g) => sum + g.members.used, 0)
 
-  const tierOptions = Object.keys(tiers)
+  const tierOptions = tiers.map(t => t.key)
 
   const filteredGyms = gyms.filter(g => {
     const matchesSearch =

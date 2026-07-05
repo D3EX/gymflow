@@ -65,12 +65,12 @@ class Plan(Base):
     __tablename__ = "plans"
     
     id = Column(Integer, primary_key=True, index=True)
-    gym_id = Column(Integer, ForeignKey("gyms.id"), nullable=False)
+    gym_id = Column(Integer, ForeignKey("gyms.id"), nullable=True)
     name = Column(String, nullable=False)
     price = Column(Float, nullable=False)
     duration_days = Column(Integer, nullable=False)
     description = Column(Text, nullable=True)
-    features = Column(JSON, default=[])  # <--- ADD THIS
+    features = Column(JSON, default=[])
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
@@ -592,18 +592,37 @@ class Gym(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     owner_email = Column(String, nullable=False)
+    # References SubscriptionTier.key — NOT a FK on purpose (tier can be looked up
+    # by key without a join everywhere; enforced at the application layer in
+    # super_admin.py instead). This is the super-admin's plan for the GYM itself
+    # (coach/member limits), completely separate from the `Plan` model below,
+    # which is what a gym sells to its own members.
     subscription_tier = Column(String, default="basic")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     users = relationship("User", back_populates="gym")
-    __tablename__ = "gyms"
+
+
+# ============================================================
+# SUPER ADMIN — GYM SUBSCRIPTION TIERS
+# ============================================================
+# This is the platform-level plan the super admin sells to GYMS
+# (e.g. "Basic" = 2 coaches / 50 members / 5000 DZD). It has no
+# relation whatsoever to the `Plan` model above, which is what an
+# individual gym sells to its own members (e.g. "Monthly", "Annual").
+# Never join or mix these two tables.
+# ============================================================
+
+class SubscriptionTier(Base):
+    __tablename__ = "subscription_tiers"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    owner_email = Column(String, nullable=False)
-    subscription_tier = Column(String, default="basic")  # basic, pro, enterprise
+    key = Column(String, unique=True, nullable=False, index=True)  # "basic", "pro", ...
+    name = Column(String, nullable=False)  # display name, e.g. "Basic"
+    price = Column(Float, nullable=True)  # None = "Contact us" (e.g. enterprise)
+    max_coaches = Column(Integer, nullable=False, default=0)
+    max_members = Column(Integer, nullable=False, default=0)
+    features = Column(JSON, default=[])
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-
-    users = relationship("User", back_populates="gym")

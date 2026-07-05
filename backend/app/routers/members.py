@@ -264,7 +264,7 @@ def create_member(data: MemberCreate, db: Session = Depends(get_db), admin: User
     if not gym:
         raise HTTPException(status_code=400, detail="Admin is not associated with a gym")
 
-    limits = get_tier_limits(gym.subscription_tier)
+    limits = get_tier_limits(db, gym.subscription_tier)
     current_member_count = (
         db.query(Member)
         .join(User, Member.user_id == User.id)
